@@ -130,10 +130,10 @@ export function poolFor(ci) {
   return poolCache.get(ci);
 }
 const newsCache = new Map();
-// Cartas aparecidas en los últimos `days` días (incluye previews aún sin legalidad).
+// Cartas nuevas (no reimpresiones) de los últimos `days` días, incluidas las previews aún sin legalidad.
 export function newsFor(ci, days = 150) {
   const key = ci + "|" + days;
-  if (!newsCache.has(key)) newsCache.set(key, search(`${ciQuery(ci)} date>=${isoDaysAgo(days)} -t:basic game:paper`, { order: "released", dir: "desc", pages: 1 }).catch(() => []));
+  if (!newsCache.has(key)) newsCache.set(key, search(`${ciQuery(ci)} date>=${isoDaysAgo(days)} -t:basic game:paper not:reprint`, { order: "released", dir: "desc", pages: 2 }).catch(() => []));
   return newsCache.get(key);
 }
 export function newCommanders(days = 120) {

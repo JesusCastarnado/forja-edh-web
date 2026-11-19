@@ -300,17 +300,51 @@ $("#combos").addEventListener("click", async e => {
 });
 
 /* ---------- novedades ---------- */
-let newsCI = null;
+// Cartas de los últimos 5 meses en los colores del mazo, con las que encajan con el comandante primero:
+// sinergia en EDHREC o su tema (tipo de criatura, fichas, contadores…) en el texto de la carta.
+let newsKey = null;
+const themedNews = new Map();
+// Si el comandante es de una tribu (vampiros, elfos…), manda la tribu; los temas genéricos (fichas, contadores…)
+// solo cuentan cuando no tiene tribu, para no llenar la lista de cartas que solo crean una ficha.
+function newsReason(c, edh, tribal, themes) {
+  const e = A.edhOf(edh, c);
+  if (e && e.synergy >= 0.1) return `Sinergia +${pctTxt(e.synergy)}`;
+  const hay = SF.norm(c.name + " " + c.type + " " + c.sub + " " + c.text);
+  const w = tribal.length ? tribal.find(x => hay.includes(x)) : themes.find(x => hay.includes(x));
+  return w ? `Tema «${w}»` : "";
+}
 async function renderNews(ci) {
-  if (!deck.cmds.length) { newsCI = null; $("#news").innerHTML = '<p class="muted small">Elige un comandante para ver las cartas nuevas en sus colores.</p>'; $("#newsLink").hidden = true; return; }
-  if (newsCI === ci) return; newsCI = ci;
-  const q = `${SF.ciQuery(ci)} date>=${SF.isoDaysAgo(150)} -t:basic game:paper`;
-  $("#newsLink").href = SF.searchURL(q); $("#newsLink").hidden = false;
-  $("#news").innerHTML = thinking("Buscando novedades…");
-  const list = (await SF.newsFor(ci)).filter(c => !c.isCmd || ci.length > 0).slice(0, 18);
-  if (newsCI !== ci) return;
-  $("#news").innerHTML = list.length ? list.map(c => `<div class="gc-item">${vcard(c)}<div class="meta"><span>${isPreview(c) ? '<span class="tag new">Preview</span>' : esc(c.released)}</span><button class="btn sm" data-addnews="${esc(c.name)}" ${deck.cards.has(A.key(c)) ? "disabled" : ""}>Añadir</button></div></div>`).join("")
+  if (!deck.cmds.length) { newsKey = null; $("#news").innerHTML = '<p class="muted small">Elige un comandante para ver las cartas nuevas que encajan con él.</p>'; $("#newsLink").hidden = true; return; }
+  const key = ci + "|" + deck.cmds.map(c => c.name).join("|");
+  if (newsKey === key) { paintNewsButtons(); return; }
+  newsKey = key;
+  const since = SF.isoDaysAgo(150), q = `${SF.ciQuery(ci)} date>=${since} -t:basic game:paper not:reprint`;
+  const words = A.synergyWords(deck.cmds).filter(w => /^[a-z]+$/.test(w)).slice(0, 5);
+  $("#newsLink").href = SF.searchURL(words.length ? `${q} (${words.map(w => `t:${w} or o:${w}`).join(" or ")})` : q); $("#newsLink").hidden = false;
+  $("#news").innerHTML = thinking("Buscando novedades para tu comandante…");
+  // Novedades (no reimpresiones) en sus colores + novedades de su tema; EDHREC dice cuáles ya se juegan con él.
+  const tq = words.length ? `${q} (${words.map(w => `t:${w} or o:${w}`).join(" or ")})` : "";
+  if (tq && !themedNews.has(tq)) themedNews.set(tq, SF.search(tq, { order: "released", dir: "desc", pages: 1 }).catch(() => []));
+  const [base, themed, edh] = await Promise.all([SF.newsFor(ci), tq ? themedNews.get(tq) : [], edhFor(deck.cmds)]);
+  if (newsKey !== key) return;
+  const cmdKeys = new Set(deck.cmds.map(A.key)), seen = new Set();
+  const all = [...themed, ...base].filter(c => { const k = A.key(c); if (seen.has(k) || cmdKeys.has(k) || !A.subsetCI(c.ci, ci)) return false; seen.add(k); return true; });
+  const tribal = A.themeWords(deck.cmds, "").filter(w => /^[a-z]+$/.test(w)), themes = words.filter(w => !tribal.includes(w));
+  const em = edhMap(edh), items = all.map(c => ({ c, why: newsReason(c, em, tribal, themes) }));
+  const fit = items.filter(x => x.why).sort((a, b) => A.fitScore(a.c, { edh: em, words: tribal.length ? tribal : themes }) - A.fitScore(b.c, { edh: em, words: tribal.length ? tribal : themes }));
+  const rest = items.filter(x => !x.why).sort((a, b) => (b.c.released || "").localeCompare(a.c.released || ""));
+  const list = [...fit, ...rest].slice(0, 18);
+  $("#news").innerHTML = list.length ? list.map(({ c, why }) => `<div class="gc-item">${vcard(c)}
+      <div class="meta"><span>${isPreview(c) ? '<span class="tag new">Preview</span>' : esc(c.released)}</span><button class="btn sm" data-addnews="${esc(c.name)}" ${deck.cards.has(A.key(c)) ? "disabled" : ""}>Añadir</button></div>
+      ${why ? `<span class="tag syn newswhy" title="Por qué encaja con tu comandante">${esc(why)}</span>` : ""}</div>`).join("")
     : '<p class="muted small">No hay cartas nuevas en estos colores en los últimos meses.</p>';
+  $("#newsNote").textContent = fit.length
+    ? `${fit.length} ${fit.length === 1 ? "encaja" : "encajan"} con ${deck.cmds.map(c => c.name.split(",")[0]).join(" y ")} (primero las de más sinergia); después, el resto de novedades en tus colores.`
+    : "Ninguna novedad encaja claramente con tu comandante; estas son las más recientes en tus colores.";
+}
+// Si añades o quitas cartas, solo se actualizan los botones (sin volver a buscar).
+function paintNewsButtons() {
+  document.querySelectorAll("#news [data-addnews]").forEach(b => { const c = SF.cached(b.dataset.addnews); b.disabled = !!c && deck.cards.has(A.key(c)); });
 }
 $("#news").addEventListener("click", e => {
   const b = e.target.closest("[data-addnews]"); if (!b) return;

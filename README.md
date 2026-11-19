@@ -61,7 +61,7 @@ Además:
 - **Radiografía**: plan de juego, cómo se juega cada fase, mulligan, puntos débiles y combos.
 - **Sugerencias rápidas** (sin IA): rellena lo que le falta al esqueleto con las cartas más jugadas en tus colores.
 - **A presupuesto**: escribes un precio máximo («déjamelo en 100 €») y propone cambios carta por carta, de la más cara a la más barata, hasta bajar de esa cifra. Sin IA cambia cada carta por una de las más jugadas que cumple la misma función (ramp por ramp, robo por robo, una criatura del tema por otra del tema…) y cuesta mucho menos; con IA, Claude elige los cambios pensando en la sinergia, y la web comprueba que cada cambio sea legal, esté en tus colores y salga más barato. Nada se aplica hasta que pulsas «Cambiar» o «Aplicar todos».
-- **Novedades para tu mazo**: cartas de los últimos 5 meses en tus colores, previews incluidas.
+- **Novedades para tu mazo**: cartas nuevas (no reimpresiones) de los últimos 5 meses en tus colores, previews incluidas. Primero salen las que encajan con tu comandante, con la razón: «Sinergia +X %» (EDHREC) o su tema, por ejemplo «Tema «vampire»» (la tribu del comandante manda sobre temas genéricos como las fichas). Después, el resto de novedades.
 - **Editar paso a paso**: abre el mazo en el constructor guiado.
 - **Guardar en Mis mazos** / **Guardar cambios**.
 

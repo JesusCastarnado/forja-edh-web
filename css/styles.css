@@ -473,3 +473,4 @@ header.top>.row{min-width:0;max-width:100%}
 .gprice .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:17px;padding:0 4px}
 .gprice .x:hover{color:var(--bad)}
 .tag.syn{border-color:var(--good);color:var(--good)}
+.newswhy{justify-self:start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
