@@ -1,86 +1,166 @@
 # Forja EDH
 
-Constructor y analizador de mazos de Commander. Las cartas, imágenes, precios y novedades salen en directo de [Scryfall](https://scryfall.com); la IA es Claude, a través de una pequeña función de servidor.
+Constructor y analizador de mazos de **Magic: The Gathering** para el formato **Commander (EDH)**.
 
-## Qué hace
+- **Web publicada:** https://forja-edh-web.vercel.app
+- **Cartas, imágenes, precios y novedades:** en directo desde [Scryfall](https://scryfall.com).
+- **IA:** Claude. En local usa tu cuenta de Claude; en la web publicada está desactivada (o con clave de API si la configuras).
+- **Mis mazos en la nube:** [Supabase](https://supabase.com), entrando con GitHub o con tu email.
 
-- **Analizar**: pegas una lista y obtienes nota, bracket estimado, curva, esqueleto (tierras, ramp, robo, interacción, barridos), probabilidades de mano inicial, precio y avisos de legalidad. Vista de lista o visual con imágenes; al pasar el ratón ves la carta y al pulsarla, su ficha.
-- **Optimizar con IA**: primero diagnostica cómo está montado el mazo y qué pide el comandante, te deja elegir el estilo y luego propone cortes y añadidos. Tiene en cuenta las cartas recientes (se le pasan con su texto, aunque sean posteriores a lo que conoce el modelo). Cada añadido se comprueba en Scryfall: legalidad e identidad de color.
-- **Radiografía**: plan de juego, mulligan, debilidades y combos.
+Todo funciona con planes gratuitos: Vercel, Supabase y Scryfall no cuestan nada, y la IA en local va incluida en tu suscripción de Claude.
+
+---
+
+## Índice
+
+1. [Qué puedes hacer](#qué-puedes-hacer)
+2. [Usarla: web publicada o en local](#usarla-web-publicada-o-en-local)
+3. [La IA](#la-ia)
+4. [Mis mazos y la nube](#mis-mazos-y-la-nube)
+5. [Cómo está hecha](#cómo-está-hecha)
+6. [Montarla desde cero](#montarla-desde-cero)
+7. [Costes y límites](#costes-y-límites)
+8. [Problemas frecuentes](#problemas-frecuentes)
+9. [Notas](#notas)
+
+---
+
+## Qué puedes hacer
+
+La web tiene cinco pestañas.
+
+### Analizar
+
+Pegas la lista de tu mazo (de Moxfield, Archidekt, ManaBox o cualquier texto «1 Nombre de carta») y obtienes:
+
+- **Nota** (de D a A+) y **nivel** (precon, mejorado, fuerte, competitivo).
+- **Bracket estimado** (B1–B5) y número de **Game Changers**.
+- **Curva de maná**, tipos de carta y símbolos de maná por color.
+- **Esqueleto**: tierras, ramp, robo, removal y barridos frente a las cifras recomendadas.
+- **Mano inicial**: probabilidad de tener 2–4 tierras, 3 o más, y ramp en mano.
+- **Avisos**: cartas fuera de la identidad de color, prohibidas, repetidas o no encontradas.
+- **Precio** aproximado del mazo (en dólares).
+- Vista de **lista** o **visual** con las imágenes. Al pasar el ratón ves la carta y al pulsarla, su ficha.
+
+Además:
+
+- **Optimizar con IA**: lee cómo está montado el mazo y qué pide el comandante, te deja elegir el estilo (reforzar el actual, otro arquetipo o «a mi manera») y propone cortes y añadidos. Cada añadido se comprueba en Scryfall: que exista, que sea legal y que esté en tu identidad de color.
+- **Radiografía**: plan de juego, cómo se juega cada fase, mulligan, puntos débiles y combos.
+- **Sugerencias rápidas** (sin IA): rellena lo que le falta al esqueleto con las cartas más jugadas en tus colores.
 - **Novedades para tu mazo**: cartas de los últimos 5 meses en tus colores, previews incluidas.
-- **Construir**: genera las 99 con IA o de forma automática (las más jugadas según EDHREC con cuotas de ramp, robo e interacción). Muestra los comandantes nuevos.
-- **Paso a paso**: eliges comandante y montas el mazo por categorías (aceleración, robo, removal, barridos, protección, recursión, tutores, plan y tierras) con sugerencias en tus colores. También abre mazos ya hechos para editarlos.
-- **Mis mazos**: guarda tus mazos (pegando la lista, importando .txt o desde Analizar / Paso a paso). Se guardan en el navegador y, si configuras la nube, se sincronizan con tu cuenta.
-- **Probar mano**: robo de 7, mulligan de Commander y robar carta, con las imágenes reales.
+- **Editar paso a paso**: abre el mazo en el constructor guiado.
+- **Guardar en Mis mazos** / **Guardar cambios**.
 
-## Estructura
+### Construir
 
-```
-index.html        la página
-css/styles.css    estilos (tema claro y oscuro)
-js/scryfall.js    acceso a la API de Scryfall, con pausa entre peticiones
-js/analysis.js    lectura de listas, estadísticas y generador automático
-js/ai.js          cliente de /api/claude (streaming)
-js/app.js         interfaz
-js/guided.js      constructor «Paso a paso»
-js/decks.js       «Mis mazos» en el navegador (localStorage)
-js/cloud.js       sincronización de «Mis mazos» con Supabase
-js/config.js      URL y clave pública de Supabase (vacías = sin nube)
-supabase/schema.sql  tabla y reglas de seguridad de la nube
-api/claude.js     función de Vercel que llama a Claude con el SDK oficial (web publicada)
-dev/serve.ps1     servidor local: sirve la web y hace de /api/claude con Claude Code y tu cuenta
-```
+Eliges comandante (y partner o fondo si lo tiene), tema, bracket y presupuesto por carta, y:
 
-## Guardar los mazos en la nube (gratis, opcional)
+- **Que la IA lo genere**: Claude arma las 99 (o 98 con dos comandantes) teniendo en cuenta las cartas nuevas.
+- **Generar automático** (sin IA): las cartas más jugadas según EDHREC, con cuotas de ramp, robo e interacción y las tierras repartidas según tus colores.
+- Lista de **comandantes nuevos** de los últimos 4 meses.
 
-Sin configurar nada, «Mis mazos» se guarda solo en el navegador. Con [Supabase](https://supabase.com) (plan gratuito) entras con tu email y los mazos se sincronizan entre dispositivos y entre la versión local y la publicada.
+### Paso a paso
 
-1. Crea una cuenta en https://supabase.com y un proyecto nuevo (plan **Free**; la región más cercana, p. ej. Frankfurt o París).
-2. En el proyecto: **SQL Editor → New query**, pega el contenido de `supabase/schema.sql` y pulsa **Run**.
-3. **Authentication → URL Configuration**:
-   - **Site URL**: la dirección de tu web en Vercel (o `http://localhost:8080` si solo la usas en local).
-   - **Redirect URLs**: añade `http://localhost:8080/**` y `https://TU-WEB.vercel.app/**`.
-4. **Project Settings → API** (o **Data API**): copia la **Project URL** y la clave **anon public** (o **publishable**) en `js/config.js`. Son públicas por diseño: las reglas de `schema.sql` hacen que cada usuario solo vea sus mazos. **No uses nunca la clave `service_role` / `secret`.**
-5. Sube el cambio (`git push`). En «Mis mazos» aparece la caja para entrar con tu email: te llega un enlace y, al abrirlo **en el mismo navegador**, quedas dentro.
+Un constructor guiado:
 
-Límites del plan gratuito: el correo de inicio de sesión que envía Supabase tiene un tope bajo de envíos por hora (de sobra para uso personal) y el proyecto se pausa si pasa una semana sin uso; los datos no se pierden, se reactiva desde el panel de Supabase.
+1. **Eliges comandante**: buscador, filtro por colores («exactos» o «que contengan»), estilos (Fichas, Contadores +1/+1, Agresivo, Aristócratas, Cementerio, Artefactos, Hechizos, Tierras, Voltron, Vida) y los más jugados.
+2. **Montas el mazo por categorías**, cada una con su objetivo:
 
-Cómo sincroniza: al entrar, al guardar o borrar un mazo y al volver a la pestaña. Por cada mazo gana la versión modificada más recientemente; los borrados también se sincronizan. Los mazos que ya tenías en el navegador se suben al entrar por primera vez.
+   | Paso | Objetivo |
+   |---|---|
+   | Aceleración (ramp) | 10 |
+   | Robo de cartas | 10 |
+   | Removal puntual | 8 |
+   | Barridos | 3 |
+   | Protección | 4 |
+   | Recursión | 3 |
+   | Tutores | 2 |
+   | Plan del comandante | 23 (22 con dos comandantes) |
+   | Tierras | 36 |
 
-## Usarla en local, con la IA de tu cuenta de Claude
+   En cada paso salen sugerencias en tus colores. Un clic añade la carta y otro la quita. Las que encajan con el texto de tu comandante llevan la etiqueta **Sinergia**.
+3. **Modo libre**: busca cualquier carta en tu identidad de color (por nombre, tipo o con la sintaxis de Scryfall).
+4. **Completar con básicas**: rellena las tierras que faltan según tus símbolos de maná.
+
+Arriba ves siempre las cartas que llevas (de 100), el precio, el coste medio, el bracket y los Game Changers; a la derecha, tu mazo por categorías y la curva. El borrador se guarda solo. Con **Analizar mazo** pasas a la pestaña Analizar.
+
+También sirve para **editar mazos que ya tienes**: desde Analizar o desde Mis mazos, pulsa «Editar paso a paso» y se abre en el primer paso incompleto.
+
+### Mis mazos
+
+Tus mazos guardados, cada uno con el arte del comandante, sus colores, cartas, precio, bracket, nota y fecha.
+
+- **Añadir**: «Pegar lista», «Importar archivo» (.txt de Moxfield, Archidekt o ManaBox, varios a la vez, o una copia .json) o guardando desde Analizar / Paso a paso.
+- **En cada mazo**: Abrir, Editar paso a paso, Copiar lista, Renombrar, Duplicar y Borrar.
+- **Buscar** por nombre o comandante.
+- **Exportar copia**: descarga todos tus mazos en un .json.
+- **Nube**: entra con GitHub o con tu email y se sincronizan entre dispositivos (ver [Mis mazos y la nube](#mis-mazos-y-la-nube)).
+
+### Probar mano
+
+Roba 7 cartas con las imágenes reales, haz mulligan con la regla de Commander (el primero es gratis) y roba cartas.
+
+---
+
+## Usarla: web publicada o en local
+
+| | Web publicada | En local |
+|---|---|---|
+| Dirección | https://forja-edh-web.vercel.app | http://localhost:8080 |
+| Hay que instalar algo | No | No (Windows y la app de Claude) |
+| IA | Desactivada (o con clave de API) | Sí, con tu cuenta de Claude |
+| Mis mazos en la nube | Sí | Sí |
+| Todo lo demás | Sí | Sí |
+
+### En local (con la IA de tu cuenta de Claude)
 
 En Windows, sin instalar nada más. La IA usa Claude Code (el `claude.exe` que trae la app de escritorio de Claude) con tu suscripción, así que no hace falta clave de API.
 
-1. Solo la primera vez, inicia sesión (se abre el navegador para entrar con tu cuenta de Claude):
+1. Clona el repositorio (o descárgalo) y abre PowerShell en su carpeta.
+2. Solo la primera vez, inicia sesión en Claude (se abre el navegador):
 
    ```bash
    powershell -ExecutionPolicy Bypass -File dev\serve.ps1 -Login
    ```
 
-2. Arranca la web (se abre sola en http://localhost:8080):
+3. Arranca la web (se abre sola en http://localhost:8080):
 
    ```bash
    powershell -ExecutionPolicy Bypass -File dev\serve.ps1
    ```
 
-   Deja esa ventana abierta mientras la uses. Opciones: `-Port 8090` para otro puerto, `-NoBrowser` para no abrir el navegador, `-ClaudePath "ruta\claude.exe"` si no encuentra Claude Code solo.
+   Deja esa ventana abierta mientras la uses y ciérrala con **Ctrl+C**.
 
-Mientras responde la IA, el servidor local atiende de una en una: espera a que termine una petición antes de lanzar otra. No abras `index.html` con doble clic: el navegador bloquea los módulos JavaScript fuera de un servidor.
+Opciones de `serve.ps1`:
 
-## Publicarla en Vercel (opcional, con clave de API)
+- `-Port 8090`: otro puerto.
+- `-NoBrowser`: no abrir el navegador.
+- `-ClaudePath "ruta\claude.exe"`: si no encuentra Claude Code solo.
 
-1. Crea una clave de API en https://console.anthropic.com (Settings → API Keys) y añade saldo a la cuenta. Es independiente de tu suscripción de Claude.
-2. Sube esta carpeta a un repositorio de GitHub.
-3. En https://vercel.com → **Add New → Project**, importa el repositorio. Framework: **Other**. No hace falta comando de build.
-4. En **Settings → Environment Variables** añade:
+No abras `index.html` con doble clic: el navegador bloquea los módulos JavaScript fuera de un servidor.
+
+---
+
+## La IA
+
+| Dónde | Cómo funciona | Coste |
+|---|---|---|
+| Local (`serve.ps1`) | `claude.exe` con tu cuenta de Claude | Incluido en tu suscripción |
+| Vercel sin `ANTHROPIC_API_KEY` | Desactivada; los botones de IA avisan | 0 € |
+| Vercel con `ANTHROPIC_API_KEY` | API de Claude (`api/claude.js`) | Lo que gastes en la API |
+
+La web publicada **no puede usar la IA de tu ordenador**, y es a propósito: el servidor local solo acepta peticiones de su propia página, para que ninguna otra web que visites pueda gastar tu cuenta de Claude.
+
+### Activar la IA en Vercel (opcional, de pago)
+
+1. Crea una clave en https://console.anthropic.com (Settings → API Keys) y añade saldo. Es independiente de tu suscripción de Claude.
+2. En Vercel → tu proyecto → **Settings → Environment Variables** añade:
    - `ANTHROPIC_API_KEY`: tu clave.
    - `APP_PASSWORD` (muy recomendable): una contraseña. Sin ella, cualquiera que encuentre la web puede gastar tu saldo. La web la pide una vez con el botón «Clave IA» y la recuerda en ese navegador.
-   - `CLAUDE_MODEL` (opcional): por defecto `claude-opus-5-5`.
-5. **Deploy**. Cada `git push` vuelve a publicar.
+   - `CLAUDE_MODEL` (opcional): por defecto `claude-opus-5-5`. Con `claude-sonnet-5-5` cuesta la mitad.
+3. Vuelve a desplegar.
 
-## Coste de la IA
-
-Usa Claude Opus 5.5 (4 $ por millón de tokens de entrada y 20 $ por millón de salida), con razonamiento adaptativo y esfuerzo bajo o medio según la tarea. A ojo:
+Coste aproximado con Claude Opus 5.5 (4 $ por millón de tokens de entrada y 20 $ por millón de salida):
 
 | Acción | Coste aproximado |
 |---|---|
@@ -89,13 +169,163 @@ Usa Claude Opus 5.5 (4 $ por millón de tokens de entrada y 20 $ por millón de 
 | Radiografía | 0,03–0,08 $ |
 | Generar un mazo completo | 0,10–0,30 $ |
 
-Para abaratarlo, pon `CLAUDE_MODEL=claude-sonnet-5-5` (la mitad de precio) en Vercel.
+Si cancelas una respuesta con «Detener», la función corta la llamada para no seguir gastando. La función tiene activado el *fallback* del servidor: si un filtro de seguridad rechazara una petición, la API la reintenta con otro modelo en vez de fallar.
 
-La función tiene activado el *fallback* del servidor (`fallbacks: "default"`): si un filtro de seguridad rechazara una petición, la API la reintenta con otro modelo en vez de fallar.
+---
+
+## Mis mazos y la nube
+
+### Dónde se guardan
+
+- **Siempre en el navegador** (`localStorage`). Funciona sin cuenta, pero se pierde si borras los datos del navegador, si usas una ventana privada o si cambias de navegador o de dirección (los de `localhost:8080` no aparecen en Vercel).
+- **En la nube si entras con tu cuenta** (Supabase). Entonces tus mazos están en cualquier dispositivo y en la versión local y la publicada, y no se pierden aunque borres el navegador.
+
+### Entrar
+
+En **Mis mazos**, en la caja «Guarda tus mazos en la nube»:
+
+- **Entrar con GitHub** (recomendado): al momento. La primera vez GitHub te pide autorizar la app «Forja EDH», que solo lee tu email.
+- **Con tu email**: te llega un enlace sin contraseña; ábrelo en el mismo navegador. El plan gratis de Supabase solo envía **2 correos por hora**.
+
+Cada navegador recuerda la sesión, así que solo hay que entrar una vez por dispositivo.
+
+### Cómo sincroniza
+
+- Al entrar, al guardar, editar o borrar un mazo, al volver a la pestaña y con el botón «Sincronizar ahora».
+- Por cada mazo gana la versión modificada más recientemente.
+- Los borrados también se sincronizan: si borras un mazo en un dispositivo, desaparece en los demás (salvo que en otro lo hayas editado después).
+- Los mazos que ya tenías en el navegador se suben la primera vez que entras.
+- Si cierras sesión, los mazos se quedan en ese navegador pero dejan de sincronizarse.
+
+### Seguridad
+
+- Cada usuario solo puede ver y modificar sus propios mazos. Lo garantizan las reglas de la base de datos (*Row Level Security*) de `supabase/schema.sql`, no la web.
+- En el código solo está la **clave publicable** de Supabase (`js/config.js`), que está pensada para ser pública. La clave secreta de Supabase y el secreto de GitHub **nunca** van en el repositorio.
+
+### Copia de seguridad
+
+Aunque uses la nube, «Exportar copia» descarga todos tus mazos en un `.json` que puedes volver a cargar con «Importar archivo».
+
+---
+
+## Cómo está hecha
+
+Una web estática (HTML, CSS y JavaScript sin frameworks ni compilación) más una función de servidor para la IA.
+
+```
+index.html            la página (todas las pestañas)
+css/styles.css        estilos (tema oscuro y claro según el sistema)
+js/app.js             interfaz: Analizar, Construir, Mis mazos, Probar mano
+js/guided.js          constructor «Paso a paso»
+js/analysis.js        lectura de listas, estadísticas, bracket y generador automático
+js/scryfall.js        acceso a la API de Scryfall (con pausa entre peticiones y caché)
+js/ai.js              cliente de /api/claude (respuesta en streaming)
+js/decks.js           «Mis mazos» en el navegador
+js/cloud.js           sincronización de «Mis mazos» con Supabase e inicio de sesión
+js/config.js          URL y clave publicable de Supabase (vacías = sin nube)
+supabase/schema.sql   tabla de mazos y reglas de seguridad
+api/claude.js         función de Vercel que llama a Claude con el SDK oficial
+dev/serve.ps1         servidor local: sirve la web y hace de /api/claude con Claude Code
+vercel.json           configuración de la función (hasta 300 s)
+package.json          dependencia de la función: @anthropic-ai/sdk
+```
+
+### Servicios
+
+| Servicio | Para qué | Plan |
+|---|---|---|
+| [Scryfall](https://scryfall.com/docs/api) | Cartas, imágenes, precios, legalidad, ranking de EDHREC | Gratis, sin cuenta |
+| [Vercel](https://vercel.com) | Publicar la web (y la función de IA) | Hobby, gratis |
+| [Supabase](https://supabase.com) | Base de datos e inicio de sesión de Mis mazos | Free |
+| GitHub | Código e inicio de sesión con GitHub | Gratis |
+| Claude | IA | Tu suscripción (local) o API (opcional) |
+
+---
+
+## Montarla desde cero
+
+Solo hace falta si quieres tu propia copia (otra cuenta, otro proyecto).
+
+### 1. Publicar en Vercel
+
+1. Sube el repositorio a GitHub.
+2. En https://vercel.com (entra con GitHub) → **Add New → Project** → importa el repositorio. Framework: **Other**, sin comando de build.
+3. **Deploy**. Cada `git push` a `main` vuelve a publicar.
+
+### 2. Base de datos en Supabase
+
+1. Crea una cuenta en https://supabase.com y un proyecto (plan **Free**; región cercana, p. ej. Frankfurt o París).
+2. **SQL Editor → New query**: pega `supabase/schema.sql` y pulsa **Run**.
+3. **Authentication → URL Configuration**:
+   - **Site URL**: la dirección de tu web en Vercel.
+   - **Redirect URLs**: `https://TU-WEB.vercel.app/**` y `http://localhost:8080/**`.
+4. **Project Settings → API Keys**: copia la **Project URL** (`https://xxxx.supabase.co`) y la **Publishable key** (`sb_publishable_…`) en `js/config.js`. No uses nunca la *secret key*.
+
+### 3. Entrar con GitHub
+
+1. En GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**:
+   - **Homepage URL**: tu web de Vercel.
+   - **Authorization callback URL**: `https://xxxx.supabase.co/auth/v1/callback` (la de tu proyecto).
+2. Copia el **Client ID** y genera un **Client secret**.
+3. En Supabase → **Authentication → Sign In / Providers → GitHub**: actívalo, pega el Client ID y el Client secret y guarda.
+
+### 4. Subir los cambios
+
+```bash
+git add -A
+```
+
+```bash
+git commit -m "Configura la nube"
+```
+
+```bash
+git push
+```
+
+---
+
+## Costes y límites
+
+| Parte | Coste | Límites del plan gratis |
+|---|---|---|
+| Vercel (Hobby) | 0 € | Uso personal y no comercial; de sobra para esta web |
+| Supabase (Free) | 0 € | 2 correos de inicio de sesión por hora; el proyecto **se pausa tras una semana sin uso** (los datos no se pierden; se reactiva desde su panel) |
+| Scryfall | 0 € | ~10 peticiones por segundo (la web deja 110 ms entre peticiones) |
+| IA en local | Incluida en tu suscripción de Claude | Los de tu plan de Claude |
+| IA en Vercel | Opcional, de pago por uso | — |
+
+---
+
+## Problemas frecuentes
+
+**«No se pudo enviar el enlace: email rate limit exceeded»**
+Supabase gratis solo envía 2 correos de inicio de sesión por hora. Entra con **GitHub** o espera una hora.
+
+**Mis mazos sale vacío en local**
+Si el puerto 8080 estaba ocupado, `serve.ps1` arranca en el 8081 (lo dice en la ventana), y cada dirección tiene sus propios mazos del navegador. Cierra lo que ocupa el 8080 o entra en la nube para tenerlos en cualquier dirección.
+
+**La nube no conecta / «Error al sincronizar»**
+Si llevas una semana sin usar la web, Supabase pausa el proyecto. Entra en https://supabase.com, abre el proyecto y pulsa **Restore**. Tus mazos siguen ahí.
+
+**El enlace del email no me deja entrar**
+Ábrelo en el mismo navegador donde lo pediste. Si lo abres en otro, ese navegador no tiene la información para completar el inicio de sesión.
+
+**La IA dice que no está activa**
+En la web publicada es lo normal si no has puesto `ANTHROPIC_API_KEY`. En local, arranca la web con `dev\serve.ps1`; si dice que Claude no tiene la sesión iniciada, ejecuta una vez `dev\serve.ps1 -Login`.
+
+**«No encontradas en Scryfall»**
+Los nombres tienen que ir en inglés. Hay búsqueda difusa para erratas, pero no traduce del español.
+
+**Una carta sale en la categoría equivocada**
+Las etiquetas (ramp, robo, removal, protección…) se calculan leyendo el texto de reglas, así que alguna puede quedar mal clasificada.
+
+---
 
 ## Notas
 
-- Scryfall pide no superar ~10 peticiones por segundo; `js/scryfall.js` deja 110 ms entre peticiones y guarda en memoria cada carta consultada.
-- Las etiquetas de ramp, robo, removal, etc. se calculan con expresiones regulares sobre el texto de reglas, así que alguna carta puede quedar mal etiquetada.
-- Los nombres de las cartas tienen que ir en inglés (hay búsqueda difusa para erratas).
-- Proyecto no oficial. Magic: The Gathering y las imágenes de las cartas son de Wizards of the Coast.
+- Las listas se leen en formato «1 Nombre» y se ignoran los códigos de edición, el número de coleccionista y las marcas de foil (`1 Sol Ring (CMM) 410 *F*`). Si hay una sección «Commander» o la marca `*CMDR*`, el comandante se detecta solo; si no, se usan las 1–2 cartas legendarias del último bloque.
+- Sideboard, maybeboard y tokens se ignoran.
+- El bracket y la nota son estimaciones automáticas (Game Changers, tutores, coste medio, popularidad), no una valoración oficial.
+- Los precios son de Scryfall en dólares (USD).
+- Proyecto no oficial. Magic: The Gathering, sus cartas e imágenes son de Wizards of the Coast. Datos de cartas de Scryfall y ranking de popularidad de EDHREC.
