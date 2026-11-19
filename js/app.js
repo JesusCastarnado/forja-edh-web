@@ -1,7 +1,7 @@
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
-import { initGuided, showGuided, editInGuided } from "./guided.js";
+import { initGuided, showGuided, editInGuided, newDeck } from "./guided.js";
 import * as Decks from "./decks.js";
 import * as Cloud from "./cloud.js";
 
@@ -406,6 +406,8 @@ const deckNotes = d => [
   ...(d.cmds.length ? [] : ["sin comandante detectado (ábrelo y elígelo en Analizar)"]),
   ...(d.unknown.length ? [`${d.unknown.length} ${d.unknown.length === 1 ? "carta no encontrada" : "cartas no encontradas"} (${d.unknown.slice(0, 5).join(", ")}${d.unknown.length > 5 ? "…" : ""})`] : []),
 ];
+
+$("#decksNew").onclick = () => newDeck();
 
 // Pegar una lista directamente en Mis mazos.
 attachAC($("#pasteCmd"), { query: cmdQuery });

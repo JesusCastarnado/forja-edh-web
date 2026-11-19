@@ -55,6 +55,7 @@ const ARCH = [
 /* ---------- estado ---------- */
 const st = {
   cmds: [], cards: new Map(), step: 0, mode: "guided", deckId: null, // deckId: mazo de «Mis mazos» que se está editando
+  dirty: false, // hay cambios sin guardar en «Mis mazos»
   pool: null, poolKey: "", shown: 30, freeList: null,
   words: [], synMemo: new Map(),
   pick: { colors: new Set(), exact: true, arch: 0, list: [], shown: 24, seq: 0 },
@@ -70,7 +71,7 @@ function targets() {
   return t;
 }
 const deckObj = () => ({ cmds: st.cmds, cards: st.cards });
-const save = () => { try { localStorage.setItem(SAVE, JSON.stringify({ cmds: st.cmds.map(c => c.name), cards: entries().map(e => [e.c.name, e.q]), step: st.step, deckId: st.deckId })); } catch {} };
+const save = () => { try { localStorage.setItem(SAVE, JSON.stringify({ cmds: st.cmds.map(c => c.name), cards: entries().map(e => [e.c.name, e.q]), step: st.step, deckId: st.deckId, dirty: st.dirty })); } catch {} };
 const clearSave = () => { try { localStorage.removeItem(SAVE); } catch {} };
 
 /* ---------- sinergia con el comandante ---------- */
@@ -156,7 +157,7 @@ function renderCmdGrid() {
 }
 function chooseCmd(c) {
   if (!c) return;
-  st.cmds = [c]; st.cards = new Map(); st.step = 0; st.mode = "guided"; st.deckId = null;
+  st.cmds = [c]; st.cards = new Map(); st.step = 0; st.mode = "guided"; st.deckId = null; st.dirty = false;
   startBuild(); save();
 }
 
@@ -182,7 +183,7 @@ function renderBar() {
       <div><span class="eyebrow">Game Changers</span><b>${s.gc.length}</b></div>
     </div>
     <div class="row gbar-act">
-      <button class="btn sm" data-gact="discard">Descartar</button>
+      <button class="btn sm" data-gact="new">+ Nuevo mazo</button>
       <button class="btn sm" data-gact="copy">Copiar lista</button>
       <button class="btn sm" data-gact="save">${st.deckId ? "Guardar cambios" : "Guardar en Mis mazos"}</button>
       <button class="btn sm primary" data-gact="analyze">Analizar mazo</button>
@@ -259,7 +260,7 @@ function renderCmdPanel() {
 }
 
 /* ---------- acciones ---------- */
-function afterChange() { renderAll(); if (st.mode === "guided") renderHead(); save(); }
+function afterChange() { st.dirty = true; renderAll(); if (st.mode === "guided") renderHead(); save(); }
 function toggle(c) {
   const k = A.key(c);
   if (st.cards.has(k)) st.cards.delete(k); else st.cards.set(k, { c, q: 1 });
@@ -284,21 +285,35 @@ async function fillBasics() {
   afterChange(); H.toast(`Añadidas ${need} tierras básicas`);
 }
 function resetToPicker() {
-  st.cmds = []; st.cards = new Map(); st.step = 0; st.mode = "guided"; st.deckId = null; clearSave();
+  st.cmds = []; st.cards = new Map(); st.step = 0; st.mode = "guided"; st.deckId = null; st.dirty = false; clearSave();
   $("#gBuild").hidden = true; $("#gPick").hidden = false; window.scrollTo({ top: 0 });
 }
+// Empieza un mazo nuevo desde la elección de comandante. Si el actual tiene cambios sin guardar,
+// ofrece guardarlo antes en «Mis mazos».
+export async function newDeck() {
+  if (!booted) await showGuided(); // recupera el borrador guardado para no perderlo sin preguntar
+  if (st.cmds.length && total() && (st.dirty || !st.deckId)) {
+    if (confirm("¿Guardar este mazo en «Mis mazos» antes de empezar uno nuevo?\n\nAceptar: guardarlo.  Cancelar: no guardarlo.")) {
+      const id = await H.saveDeck(st.cmds, st.cards, st.deckId);
+      if (!id) return; // canceló el nombre o no se pudo guardar: se queda como estaba
+    } else if (!confirm("Se perderá el mazo actual. ¿Empezar uno nuevo sin guardarlo?")) return;
+  }
+  resetToPicker();
+  location.hash = "guiado";
+  if (booted) $("#gCmdSearch").focus();
+}
 async function onAction(act) {
-  if (act === "save") {
+  if (act === "new") {
+    newDeck();
+  } else if (act === "save") {
     const id = await H.saveDeck(st.cmds, st.cards, st.deckId);
-    if (id) { st.deckId = id; save(); renderBar(); }
+    if (id) { st.deckId = id; st.dirty = false; save(); renderBar(); }
   } else if (act === "analyze") {
     if (!total()) { H.toast("Añade alguna carta primero"); return; }
     H.onAnalyze(st.cmds.slice(), new Map([...st.cards].map(([k, v]) => [k, { ...v }])), st.deckId);
   } else if (act === "copy") {
     const t = A.deckToText(deckObj());
     navigator.clipboard.writeText(t).then(() => H.toast("Lista copiada"), () => H.toast("No se pudo copiar"));
-  } else if (act === "discard") {
-    if (!total() || confirm("¿Descartar este mazo? Se borrará el borrador.")) resetToPicker();
   } else if (act === "change") {
     if (!total() || confirm("Si cambias de comandante se vacía el mazo. ¿Seguir?")) resetToPicker();
   }
@@ -360,7 +375,7 @@ export function editInGuided(cmds, cards, deckId = null) {
   // Solo preguntamos si hay otro mazo a medias (con otro comandante); si es el mismo, se actualiza sin más.
   const same = draft && draft.cmds.join("|") === cmds.map(c => c.name).join("|");
   if (draft && draft.n && !same && !confirm(`Tienes a medias un mazo de ${draft.cmds.join(" + ")} en «Paso a paso». ¿Reemplazarlo por este?`)) return false;
-  st.cmds = cmds.slice(); st.cards = new Map([...cards].map(([k, v]) => [k, { ...v }])); st.mode = "guided"; st.deckId = deckId;
+  st.cmds = cmds.slice(); st.cards = new Map([...cards].map(([k, v]) => [k, { ...v }])); st.mode = "guided"; st.deckId = deckId; st.dirty = false;
   const n = counts(), t = targets();
   st.step = Math.max(0, STEPS.findIndex(s => n[s.k] < t[s.k]));
   save();
@@ -377,7 +392,7 @@ export async function showGuided() {
     await SF.collection([...saved.cmds, ...(saved.cards || []).map(x => x[0])]).catch(() => {});
     const cmds = saved.cmds.map(n => SF.cached(n)).filter(Boolean);
     if (!cmds.length) return;
-    st.cmds = cmds; st.step = Math.min(STEPS.length - 1, +saved.step || 0); st.deckId = saved.deckId || null;
+    st.cmds = cmds; st.step = Math.min(STEPS.length - 1, +saved.step || 0); st.deckId = saved.deckId || null; st.dirty = !!saved.dirty;
     for (const [n, q] of saved.cards || []) { const c = SF.cached(n); if (c) st.cards.set(A.key(c), { c, q: Math.max(1, +q || 1) }); }
     startBuild();
   }
