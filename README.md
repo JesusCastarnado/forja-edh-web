@@ -20,23 +20,31 @@ js/scryfall.js    acceso a la API de Scryfall, con pausa entre peticiones
 js/analysis.js    lectura de listas, estadísticas y generador automático
 js/ai.js          cliente de /api/claude (streaming)
 js/app.js         interfaz
-api/claude.js     función de Vercel que llama a Claude con el SDK oficial
-dev/serve.ps1     servidor local para probar sin Node
+api/claude.js     función de Vercel que llama a Claude con el SDK oficial (web publicada)
+dev/serve.ps1     servidor local: sirve la web y hace de /api/claude con Claude Code y tu cuenta
 ```
 
-## Probar en local (sin IA)
+## Usarla en local, con la IA de tu cuenta de Claude
 
-En Windows, sin instalar nada:
+En Windows, sin instalar nada más. La IA usa Claude Code (el `claude.exe` que trae la app de escritorio de Claude) con tu suscripción, así que no hace falta clave de API.
 
-```bash
-powershell -ExecutionPolicy Bypass -File dev\serve.ps1
-```
+1. Solo la primera vez, inicia sesión (se abre el navegador para entrar con tu cuenta de Claude):
 
-Abre http://localhost:8080. Todo funciona salvo los botones de IA, que avisan de que falta el servidor.
+   ```bash
+   powershell -ExecutionPolicy Bypass -File dev\serve.ps1 -Login
+   ```
 
-Para probar también la IA en local necesitas Node.js y la CLI de Vercel: `npx vercel dev` (con `ANTHROPIC_API_KEY` en un archivo `.env.local`).
+2. Arranca la web (se abre sola en http://localhost:8080):
 
-## Publicarla en Vercel (gratis)
+   ```bash
+   powershell -ExecutionPolicy Bypass -File dev\serve.ps1
+   ```
+
+   Deja esa ventana abierta mientras la uses. Opciones: `-Port 8090` para otro puerto, `-NoBrowser` para no abrir el navegador, `-ClaudePath "ruta\claude.exe"` si no encuentra Claude Code solo.
+
+Mientras responde la IA, el servidor local atiende de una en una: espera a que termine una petición antes de lanzar otra. No abras `index.html` con doble clic: el navegador bloquea los módulos JavaScript fuera de un servidor.
+
+## Publicarla en Vercel (opcional, con clave de API)
 
 1. Crea una clave de API en https://console.anthropic.com (Settings → API Keys) y añade saldo a la cuenta. Es independiente de tu suscripción de Claude.
 2. Sube esta carpeta a un repositorio de GitHub.

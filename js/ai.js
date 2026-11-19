@@ -63,7 +63,8 @@ export async function askJSON(prompt, opts) {
 
 const ERR = {
   auth: "La contraseña de la IA no es correcta. Pulsa «Clave IA» arriba y escríbela.",
-  not_configured: "La IA no está configurada en este servidor. Añade ANTHROPIC_API_KEY en Vercel (mira el README).",
+  not_configured: "La IA no está activa. En local, arranca la web con dev\\serve.ps1; publicada, añade ANTHROPIC_API_KEY en Vercel (mira el README).",
+  not_logged_in: "Claude no tiene tu sesión iniciada en este ordenador. En PowerShell ejecuta una vez: powershell -ExecutionPolicy Bypass -File dev\\serve.ps1 -Login",
   server_key: "La clave de la API configurada en el servidor no es válida.",
   rate_limited: "Se ha alcanzado el límite de uso de la API. Prueba en un rato.",
   refused: "Claude no ha querido responder a esta petición.",

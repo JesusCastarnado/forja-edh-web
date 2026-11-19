@@ -275,7 +275,10 @@ attachAC($("#addCard"), {
 /* ---------- IA ---------- */
 async function aiReady(out) {
   const st = await AI.aiStatus();
-  if (!st.ok || !st.configured) { out.innerHTML = `<p class="lo">${esc(AI.errMsg({ code: "not_configured" }))} Mientras tanto, prueba «Sugerencias rápidas» o «Generar automático».</p>`; return false; }
+  if (!st.ok || !st.configured) {
+    const code = st.mode === "local" && st.found ? "not_logged_in" : "not_configured";
+    out.innerHTML = `<p class="lo">${esc(AI.errMsg({ code }))} Mientras tanto, prueba «Sugerencias rápidas» o «Generar automático».</p>`; return false;
+  }
   if (st.password && !AI.getPass()) { await askPass(); if (!AI.getPass()) { out.innerHTML = '<p class="lo">Hace falta la contraseña de la IA.</p>'; return false; } }
   return true;
 }
@@ -561,7 +564,8 @@ window.addEventListener("hashchange", route);
   route(); render(); showCmdPreview();
   AI.aiStatus().then(st => {
     $("#btnPass").hidden = !(st.ok && st.password);
-    if (!st.ok || !st.configured) $("#aiNote").textContent = "La IA no está activa en este servidor: falta desplegar la función /api/claude con ANTHROPIC_API_KEY. El análisis, las novedades y el generador automático funcionan igual.";
+    if (st.ok && st.mode === "local" && st.configured) $("#aiNote").textContent = "IA en modo local: usa tu cuenta de Claude a través de Claude Code en este ordenador.";
+    else if (!st.ok || !st.configured) $("#aiNote").textContent = (st.mode === "local" && st.found ? AI.errMsg({ code: "not_logged_in" }) : AI.errMsg({ code: "not_configured" })) + " El análisis, las novedades y el generador automático funcionan igual.";
   });
   const saved = store.get("forja-deck");
   if (saved && saved.trim()) {
