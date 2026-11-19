@@ -4,7 +4,7 @@
 import * as Decks from "./decks.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
-const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
+const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/+esm"; // admite las claves «publishable»
 const COLS = "id,name,cmds,text,stats,created,updated,deleted";
 
 let client = null, user = null, syncing = null, timer = null, lastSync = 0, lastError = "";
