@@ -117,11 +117,21 @@ let deckKey = "", library = [], hand = [], mulls = 0;
 let viewMode = store.get("forja-view") === "visual" ? "visual" : "list";
 
 async function loadFromText(text, overrideNames = []) {
+  const n = new Set(A.parseList(text).main.map(e => e.name)).size;
+  const st = $("#loadStatus");
+  st.innerHTML = `<span class="spin"></span><span>Buscando ${n} cartas en Scryfall…</span>`;
+  try {
+    deck = await buildDeck(text, overrideNames);
+    st.innerHTML = "";
+  } catch (e) {
+    st.innerHTML = `<span class="no">No se pudo consultar Scryfall: ${esc(e.message || e)}. Comprueba la conexión y vuelve a intentarlo.</span>`;
+  }
+}
+// Lee una lista en texto y la convierte en mazo, sin tocar el de Analizar (también lo usa la importación de Mis mazos).
+async function buildDeck(text, overrideNames = []) {
   const p = A.parseList(text);
   const names = [...p.main, ...p.cmd].map(e => e.name).concat(overrideNames);
-  const st = $("#loadStatus");
-  st.innerHTML = `<span class="spin"></span><span>Buscando ${new Set(names).size} cartas en Scryfall…</span>`;
-  try {
+  {
     const { found } = await SF.collection(names);
     const get = n => found.get(SF.norm(n)) || SF.cached(n);
     let cmds = (overrideNames.length ? overrideNames : p.cmd.map(e => e.name)).map(get).filter(Boolean);
@@ -140,10 +150,7 @@ async function loadFromText(text, overrideNames = []) {
       const k = A.key(c), cur = cards.get(k);
       cards.set(k, { c, q: (cur ? cur.q : 0) + e.qty });
     }
-    deck = { cmds: cmds.slice(0, 2), cards, unknown, illegal };
-    st.innerHTML = "";
-  } catch (e) {
-    st.innerHTML = `<span class="no">No se pudo consultar Scryfall: ${esc(e.message || e)}. Comprueba la conexión y vuelve a intentarlo.</span>`;
+    return { cmds: cmds.slice(0, 2), cards, unknown, illegal };
   }
 }
 function syncText() { $("#deckText").value = A.deckToText(deck); setCmdInputs(); }
@@ -351,10 +358,29 @@ $("#decksExport").onclick = () => {
   a.download = `forja-mis-mazos-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
+// Importa una copia .json de Mis mazos o listas en texto (.txt de Moxfield, Archidekt, ManaBox…), una o varias a la vez.
 $("#decksImport").addEventListener("change", async e => {
-  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
-  try { const n = Decks.importJSON(await file.text()); renderDecks(); toast(n ? `Importados ${n} mazos` : "No había mazos nuevos en la copia"); }
-  catch (err) { toast("No se pudo importar: " + (err.message || "archivo no válido")); }
+  const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+  const st = $("#decksStatus"); let n = 0; const notes = [];
+  for (const file of files) {
+    st.innerHTML = `<span class="spin"></span><span>Importando ${esc(file.name)}…</span>`;
+    try {
+      const text = await file.text();
+      let json = null; try { json = JSON.parse(text); } catch {}
+      if (json !== null) { n += Decks.importJSON(text); continue; }
+      const d = await buildDeck(text);
+      const total = [...d.cards.values()].reduce((a, x) => a + x.q, 0) + d.cmds.length;
+      if (!total) { notes.push(`${file.name}: no se encontró ninguna carta`); continue; }
+      const name = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+      if (!Decks.upsert({ name, cmds: d.cmds, cards: d.cards })) { notes.push(`${file.name}: el navegador no deja guardar más`); continue; }
+      n++;
+      if (!d.cmds.length) notes.push(`${file.name}: sin comandante detectado (ábrelo y elígelo en Analizar)`);
+      if (d.unknown.length) notes.push(`${file.name}: ${d.unknown.length} ${d.unknown.length === 1 ? "carta no encontrada" : "cartas no encontradas"} (${d.unknown.slice(0, 5).join(", ")}${d.unknown.length > 5 ? "…" : ""})`);
+    } catch (err) { notes.push(`${file.name}: ${err.message || "archivo no válido"}`); }
+  }
+  renderDecks();
+  st.innerHTML = (n ? `<span class="ok">Importados ${n} ${n === 1 ? "mazo" : "mazos"}.</span>` : '<span class="lo">No se importó ningún mazo nuevo.</span>')
+    + (notes.length ? `<ul class="issues">${notes.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
 });
 attachAC($("#cmd1"), { query: cmdQuery });
 attachAC($("#cmd2"), { query: cmdQuery });

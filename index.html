@@ -196,16 +196,17 @@
 <section id="view-mazos" hidden>
   <div class="hero">
     <h2>Mis mazos.</h2>
-    <p>Los mazos que guardas desde Analizar o Paso a paso. Se quedan en este navegador; para llevarlos a otro ordenador, exporta una copia y luego impórtala allí.</p>
+    <p>Los mazos que guardas desde Analizar o Paso a paso. Se quedan en este navegador; para llevarlos a otro ordenador, exporta una copia y luego impórtala allí. También puedes importar listas en texto (.txt) de Moxfield, Archidekt o ManaBox, varias a la vez.</p>
   </div>
   <div class="row between" style="margin-bottom:14px">
     <input type="text" id="decksFilter" autocomplete="off" placeholder="Buscar por nombre o comandante…" aria-label="Buscar mazo" style="width:min(340px,100%)">
     <div class="row">
       <button class="btn sm" id="decksExport">Exportar copia</button>
-      <label class="btn sm" for="decksImport" style="cursor:pointer">Importar copia</label>
-      <input type="file" id="decksImport" accept=".json,application/json" hidden>
+      <label class="btn sm" for="decksImport" style="cursor:pointer" title="Una copia .json de Mis mazos o listas en texto (.txt) de Moxfield, Archidekt, ManaBox…">Importar</label>
+      <input type="file" id="decksImport" accept=".json,.txt,.dek,.dck,application/json,text/plain" multiple hidden>
     </div>
   </div>
+  <div class="status dstatus" id="decksStatus"></div>
   <div class="decks" id="decksList"></div>
 </section>
 
