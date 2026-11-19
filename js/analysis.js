@@ -112,16 +112,50 @@ export function themeWords(cmds, theme) {
   return [...w];
 }
 
+// Palabras del tema del comandante a partir de su texto (fichas, contadores, cementerio…), además de themeWords.
+const THEMES = [
+  [/\btokens?\b/, ["token"]], [/\+1\/\+1 counter/, ["+1/+1 counter"]], [/graveyard/, ["graveyard"]], [/sacrific/, ["sacrifice"]],
+  [/\bartifacts?\b/, ["artifact"]], [/\benchantments?\b/, ["enchantment"]], [/instant|sorcery|noncreature spell/, ["instant", "sorcery"]],
+  [/landfall|land enters|lands? you control/, ["landfall", "land enters"]], [/equip/, ["equip"]], [/gain life|lifelink|life total/, ["gain life", "lifelink"]],
+];
+export function synergyWords(cmds, theme = "") {
+  const w = new Set(themeWords(cmds, theme));
+  for (const c of cmds) { const t = norm(c.text); for (const [re, ws] of THEMES) if (re.test(t)) ws.forEach(x => w.add(x)); }
+  return [...w];
+}
+export const matchesWords = (c, words) => !!words.length && words.some(w => norm(c.name + " " + c.type + " " + c.sub + " " + c.text).includes(w));
+
+// Puntuación para ordenar candidatas (más baja = mejor). Prima lo que encaja con ESTE comandante sobre los staples genéricos:
+// - EDHREC del comandante (`edh`: Map clave → { synergy, inclusion }): % de sus mazos que la juegan y, sobre todo, la sinergia
+//   (cuánto más se juega con él que con otros de sus colores).
+// - Palabras de su tema en el texto de la carta.
+// - La popularidad general (ranking de EDHREC) solo desempata, en escala logarítmica.
+// Datos de EDHREC de una carta (EDHREC usa solo el nombre de la cara frontal en las cartas de dos caras).
+export const edhOf = (m, c) => (m && c ? m.get(norm(String(c.name).split(" // ")[0])) : undefined);
+export function fitScore(c, { edh = null, words = [], boosted = null } = {}) {
+  let s = Math.log10((c.rank || 99999) + 10);
+  const e = edhOf(edh, c);
+  if (e) s += -2.5 * e.inclusion - 10 * Math.max(0, e.synergy) + 4 * Math.max(0, -e.synergy);
+  else if (edh && edh.size) s += 0.6; // ni siquiera sale en los mazos de este comandante
+  if ((boosted && boosted.has(key(c))) || matchesWords(c, words)) s -= 0.8;
+  return s;
+}
+// ¿Tiene sinergia clara con el comandante? (para la etiqueta «Sinergia»).
+export function hasSynergy(c, { edh = null, words = [] } = {}) {
+  const e = edhOf(edh, c);
+  return e ? e.synergy >= 0.1 : matchesWords(c, words);
+}
+
 // Completa `cards` (Map clave -> {c,q}) hasta 100 menos los comandantes (99, o 98 con partner/background)
 // con cuotas de ramp/robo/interacción, tierras y básicas.
-export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, theme = "", boosted = new Set() } = {}) {
-  const ci = ciUnion(cmds), words = themeWords(cmds, theme), size = 100 - cmds.length;
+export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, theme = "", boosted = new Set(), edh = null } = {}) {
+  const ci = ciUnion(cmds), words = synergyWords(cmds, theme), size = 100 - cmds.length;
   const gcMax = bracket <= 2 ? 0 : bracket === 3 ? 3 : 99;
   let gcCount = [...cards.values()].filter(e => e.c.gc).length;
   const cmdKeys = new Set(cmds.map(key));
   const ok = c => !cmdKeys.has(key(c)) && !cards.has(key(c)) && !isBasic(c) && c.legal && subsetCI(c.ci, ci)
     && !(budget && c.price > budget) && !(c.gc && gcCount >= gcMax);
-  const score = c => { let r = c.rank; if (boosted.has(key(c))) r /= 8; else if (words.length) { const hay = norm(c.name + " " + c.type + " " + c.sub + " " + c.text); if (words.some(w => hay.includes(w))) r /= 5; } return r; };
+  const memo = new Map(), score = c => { const k = key(c); if (!memo.has(k)) memo.set(k, fitScore(c, { edh, words, boosted })); return memo.get(k); };
   const seen = new Set();
   const list = pool.filter(c => { const k = key(c); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => score(a) - score(b));
   const take = c => { cards.set(key(c), { c, q: 1 }); if (c.gc) gcCount++; };
@@ -146,7 +180,7 @@ export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, t
     });
   }
   while (total() > size) {
-    const worst = [...cards.values()].filter(e => !isLand(e.c)).sort((a, b) => b.c.rank - a.c.rank)[0];
+    const worst = [...cards.values()].filter(e => !isLand(e.c)).sort((a, b) => score(b.c) - score(a.c))[0];
     if (!worst) break; cards.delete(key(worst.c));
   }
   return cards;
@@ -156,16 +190,16 @@ export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, t
 // cumplan la misma función (ramp, robo, removal… o el mismo tipo si no tiene etiqueta), hasta bajar de `target`.
 // `pool`: cartas candidatas (ordenadas o no); `basics`: { W: carta, U: carta, … } para sustituir tierras caras.
 // Devuelve { swaps: [{ out, in, save }], from, to }.
-export function budgetSwaps(d, pool, target, basics = {}) {
+export function budgetSwaps(d, pool, target, basics = {}, { edh = null } = {}) {
   const s = analyze(d), ci = ciUnion(d.cmds);
   const from = s.price; let total = from;
   const swaps = [];
   if (total <= target) return { swaps, from, to: total };
   const taken = new Set([...d.cards.keys(), ...d.cmds.map(key)]);
-  const seen = new Set(), words = themeWords(d.cmds, "");
-  // Primero las que encajan con el comandante (tipo de criatura, temas de su texto) y luego las más jugadas.
-  const syn = c => words.length && words.some(w => norm(c.name + " " + c.type + " " + c.sub + " " + c.text).includes(w));
-  const score = c => c.rank / (syn(c) ? 6 : 1);
+  const seen = new Set(), words = synergyWords(d.cmds);
+  // Primero las que encajan con el comandante (EDHREC y temas de su texto) y luego las más jugadas.
+  const syn = c => hasSynergy(c, { edh, words });
+  const score = c => fitScore(c, { edh, words });
   const cands = pool.filter(c => { const k = key(c); if (seen.has(k)) return false; seen.add(k);
     return c.legal && !isBasic(c) && c.price > 0 && subsetCI(c.ci, ci) && !taken.has(k); }).sort((a, b) => score(a) - score(b));
   const nCards = Math.max(1, s.total - d.cmds.length);

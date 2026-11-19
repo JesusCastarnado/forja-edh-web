@@ -3,6 +3,7 @@
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
+import * as Edh from "./edhrec.js";
 import { money, cardMoney, symbol, currencyName } from "./currency.js";
 
 const { F } = A;
@@ -35,7 +36,7 @@ const STEPS = [
   { k: "prot", label: "Protección", t: 4, c: "var(--mW)", desc: "Mantienen vivo a tu comandante y a tus piezas clave: antimaleficio, indestructible, fases o contrahechizos baratos." },
   { k: "recur", label: "Recursión", t: 3, c: "var(--s-purple)", desc: "Recuperan cartas del cementerio para no quedarte sin gasolina tras un barrido." },
   { k: "tutors", label: "Tutores", t: 2, c: "var(--accent)", desc: "Buscan la carta que necesitas. Suben el nivel de poder: pocos en mesas casuales." },
-  { k: "plan", label: "Plan del comandante", t: 23, c: "var(--s-pink)", desc: "Las cartas que hacen que tu comandante brille: sinergias, motores y formas de ganar. Las marcadas con «Sinergia» encajan con su texto." },
+  { k: "plan", label: "Plan del comandante", t: 23, c: "var(--s-pink)", desc: "Las cartas que hacen que tu comandante brille: sinergias, motores y formas de ganar. Las marcadas con «Sinergia» se juegan mucho más con este comandante que con otros (EDHREC) o encajan con su texto." },
   { k: "lands", label: "Tierras", t: 36, c: "var(--mC)", desc: "Tierras que entran en tus colores sin perder tiempo. Al final, «Completar con básicas» rellena el resto según tus símbolos de maná." },
 ];
 const catOf = c => A.isLand(c) ? "lands" : (STEPS.find(s => s.k !== "plan" && s.k !== "lands" && is[s.k](c)) || { k: "plan" }).k;
@@ -61,6 +62,7 @@ const st = {
   dirty: false, // hay cambios sin guardar en «Mis mazos»
   pool: null, poolKey: "", shown: 30, freeList: null,
   words: [], synMemo: new Map(),
+  edh: null, edhDecks: 0, // datos de EDHREC del comandante: Map clave → { synergy, inclusion }
   pick: { colors: new Set(), exact: true, arch: 0, list: [], shown: 24, seq: 0 },
   maxPrice: (() => { try { return Math.max(0, parseFloat(localStorage.getItem(PRICE)) || 0); } catch { return 0; } })(),
 };
@@ -91,26 +93,35 @@ function synWords(cmds) {
   for (const c of cmds) { const t = low(c); for (const [re, ws] of THEMES) if (re.test(t)) ws.forEach(x => w.add(x)); }
   return [...w];
 }
+// «Sinergia»: según EDHREC (se juega mucho más con este comandante que con otros) o, si no hay datos, por su texto.
 function isSyn(c) {
-  if (!st.words.length) return false;
   const k = A.key(c);
-  if (!st.synMemo.has(k)) { const hay = SF.norm(c.name + " " + c.type + " " + c.sub + " " + c.text); st.synMemo.set(k, st.words.some(w => hay.includes(w))); }
+  if (!st.synMemo.has(k)) st.synMemo.set(k, A.hasSynergy(c, { edh: st.edh, words: st.words }));
   return st.synMemo.get(k);
 }
-const score = c => c.rank / (isSyn(c) ? 6 : 1);
+// Orden de las sugerencias: lo que encaja con el comandante primero, no solo lo más popular.
+const score = c => A.fitScore(c, { edh: st.edh, words: st.words });
 
 /* ---------- reserva de cartas para sugerir ---------- */
 async function loadPool() {
   const ci = A.ciUnion(st.cmds), key = ci + "|" + st.words.join(",");
   if (st.pool && st.poolKey === key) return;
-  st.pool = null; st.poolKey = key; renderGrid();
+  st.pool = null; st.poolKey = key; st.edh = null; st.edhDecks = 0; st.synMemo = new Map(); renderGrid();
   try {
     const base = [...await SF.poolFor(ci)];
+    const edh = await Edh.forCommanders(st.cmds).catch(() => null);
+    if (st.poolKey !== key) return;
+    if (edh) {
+      await SF.collection([...edh.cards.values()].map(x => x.name), { fuzzyLimit: 0 }).catch(() => {});
+      st.edh = edh.cards; st.edhDecks = edh.decks; st.synMemo = new Map();
+      base.push(...[...edh.cards.values()].map(x => SF.cached(x.name)).filter(Boolean));
+    }
     if (st.words.length) {
       const q = `${SF.ciQuery(ci)} legal:commander game:paper (${st.words.slice(0, 5).map(w => `o:"${w}" or t:"${w}"`).join(" or ")})`;
       base.push(...await SF.search(q, { pages: 2 }).catch(() => []));
     }
     if (st.poolKey !== key) return;
+    if (st.mode === "guided") renderHead();
     const cmdKeys = new Set(st.cmds.map(A.key)), seen = new Set();
     st.pool = base.filter(c => { const k = A.key(c); if (seen.has(k) || cmdKeys.has(k) || A.isBasic(c) || !c.legal || !A.subsetCI(c.ci, ci)) return false; seen.add(k); return true; })
       .sort((a, b) => score(a) - score(b));
@@ -142,7 +153,7 @@ function tile(c, attr) {
     <button class="gpickbtn" data-${attr}="${e(c.name)}" ${attr === "pick" ? `aria-pressed="${on}"` : ""} aria-label="${attr === "pick" ? (on ? "Quitar " : "Añadir ") : "Elegir "}${e(c.name)}">
       ${c.img ? `<img src="${e(c.img)}" alt="" loading="lazy">` : `<span class="noimg">${e(c.name)}</span>`}<span class="gcheck" aria-hidden="true">✓</span></button>
     <div class="gmeta"><button class="cn" data-name="${e(c.name)}">${e(c.name)}</button>
-      <div class="gbadges">${attr === "cmd" ? H.pipsHTML(c.ci) : ""}${attr === "pick" && isSyn(c) ? '<span class="gb syn">Sinergia</span>' : ""}<span class="gb">${c.rank >= 99999 ? "sin ranking" : "#" + c.rank}</span>${c.gc ? '<span class="gb gc">GC</span>' : ""}<span class="gb">${cardMoney(c)}</span></div></div></div>`;
+      <div class="gbadges">${attr === "cmd" ? H.pipsHTML(c.ci) : ""}${attr === "pick" && isSyn(c) ? '<span class="gb syn">Sinergia</span>' : ""}${attr === "pick" && st.edh && A.edhOf(st.edh, c) ? `<span class="gb" title="Mazos de este comandante en EDHREC que la juegan">${Math.round(A.edhOf(st.edh, c).inclusion * 100)} % mazos</span>` : `<span class="gb">${c.rank >= 99999 ? "sin ranking" : "#" + c.rank}</span>`}${c.gc ? '<span class="gb gc">GC</span>' : ""}<span class="gb">${cardMoney(c)}</span></div></div></div>`;
 }
 
 /* ---------- 1. elegir comandante ---------- */
@@ -234,9 +245,10 @@ function renderHead() {
     return;
   }
   const s = STEPS[st.step], n = counts()[s.k], t = targets()[s.k], last = st.step === STEPS.length - 1;
+  const src = st.edh ? ` Ordenadas por lo que mejor encaja con tu comandante según ${st.edhDecks ? st.edhDecks.toLocaleString("es-ES") + " mazos de" : ""} EDHREC.` : "";
   head.style.setProperty("--c", s.c);
   head.innerHTML = `<div class="gsegs">${STEPS.map((x, i) => `<span class="${i === st.step ? "cur" : counts()[x.k] >= targets()[x.k] ? "done" : ""}"></span>`).join("")}</div>
-    <div class="gsh"><div><div class="eyebrow">Paso ${st.step + 1} de ${STEPS.length}</div><h3>${s.label} <span class="mono ${n >= t ? "ok" : n >= t - 2 ? "lo" : "muted"}">${n}/${t}</span></h3><p class="muted">${s.desc}</p></div>
+    <div class="gsh"><div><div class="eyebrow">Paso ${st.step + 1} de ${STEPS.length}</div><h3>${s.label} <span class="mono ${n >= t ? "ok" : n >= t - 2 ? "lo" : "muted"}">${n}/${t}</span></h3><p class="muted">${s.desc}${src}</p></div>
     <div class="row"><button class="btn" data-gnav="-1" ${st.step === 0 ? "disabled" : ""}>← Atrás</button>${last ? '<button class="btn primary" data-gact="analyze">Analizar mazo</button>' : '<button class="btn primary" data-gnav="1">Siguiente →</button>'}</div></div>`;
 }
 function renderGrid() {
@@ -305,6 +317,9 @@ Comandante(s):
 ${cmdTxt}
 Identidad de color: ${ci || "incolora"}. ${total() + st.cmds.length} de 100 cartas. Bracket estimado B${s.bracket}, ${s.gc.length} Game Changers, CMC medio ${s.avgCmc.toFixed(2)}.
 Categorías (actual/objetivo): ${cats}.
+${(() => { const e = st.edh && A.edhOf(st.edh, c); return st.edh ? (e ? `Según EDHREC, ${c.name} aparece en el ${Math.round(e.inclusion * 100)} % de los mazos de este comandante (sinergia ${e.synergy >= 0 ? "+" : ""}${Math.round(e.synergy * 100)} %).` : `Según EDHREC, ${c.name} casi no se juega con este comandante.`) : ""; })()}
+${st.edh ? "Cartas con más sinergia con este comandante según EDHREC que no están en la lista: " + [...st.edh.values()].filter(e => e.synergy >= 0.1 && !st.cards.has(SF.norm(e.name))).sort((a, b) => b.synergy - a.synergy).slice(0, 20).map(e => e.name).join(", ") + "." : ""}
+Valora sobre todo la sinergia con el comandante; un staple genérico solo es buena idea si cubre un hueco que nada con sinergia cubre.
 Lista actual:
 ${list || "(vacía)"}
 Responde SOLO con JSON, con esta forma exacta:

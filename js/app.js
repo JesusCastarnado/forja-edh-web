@@ -6,6 +6,7 @@ import * as Decks from "./decks.js";
 import * as Cloud from "./cloud.js";
 import { initShared, showShared } from "./shared.js";
 import * as Combos from "./combos.js";
+import * as Edh from "./edhrec.js";
 import { initCompare, showCompare } from "./compare.js";
 import { initGoldfish, showGoldfish } from "./goldfish.js";
 import { initCollection, showCollection, renderColDeck as colDeckHTML, deckMissingCount } from "./colview.js";
@@ -689,6 +690,40 @@ function deckBrief(s) {
   const list = [...deck.cards.values()].map(e => `${e.q} ${e.c.name}`).join("\n");
   return `Comandante(s):\n${c0 || "(sin comandante)"}\nIdentidad de color: ${s.ci || "incolora"}\nEstadísticas: ${s.total} cartas, ${s.lands} tierras, ${s.ramp} ramp, ${s.draw} robo, ${s.removal} removal, ${s.counters} contrahechizos, ${s.wipes} barridos, ${s.tutors} tutores, CMC medio ${s.avgCmc.toFixed(2)}, ${s.gc.length} Game Changers, bracket estimado B${s.bracket}.\nLista:\n${list}`;
 }
+/* ---------- sinergia con el comandante (EDHREC) ---------- */
+// Datos de EDHREC del comandante, con sus cartas ya buscadas en Scryfall (precio, legalidad, colores). null si no hay.
+async function edhFor(cmds) {
+  const d = await Edh.forCommanders(cmds).catch(() => null);
+  if (!d) return null;
+  await SF.collection([...d.cards.values()].map(x => x.name), { fuzzyLimit: 0 }).catch(() => {});
+  return d;
+}
+const edhMap = d => (d ? d.cards : null);
+// Cartas de EDHREC que encajan con el comandante y aún no están en el mazo (para la IA y para sugerir).
+function synergyCards(d, cmds, has, { maxPrice = 0 } = {}) {
+  if (!d) return [];
+  const ci = A.ciUnion(cmds), cmdKeys = new Set(cmds.map(A.key));
+  return [...d.cards.values()].map(e => ({ e, c: SF.cached(e.name) }))
+    .filter(x => x.c && x.c.legal && !A.isBasic(x.c) && A.subsetCI(x.c.ci, ci) && !cmdKeys.has(A.key(x.c)) && !has(x.c) && x.e.synergy >= 0.05
+      && (!maxPrice || x.c.price <= maxPrice))
+    .sort((a, b) => b.e.synergy - a.e.synergy);
+}
+const pctTxt = v => Math.round(v * 100) + " %";
+// Texto para la IA: qué cartas con sinergia faltan y cuáles del mazo casi nadie juega con este comandante.
+function synergyBrief(d, cmds, cards, { prices = false, maxPrice = 0, max = 40 } = {}) {
+  if (!d) return "";
+  const has = c => cards.has(A.key(c));
+  const top = synergyCards(d, cmds, has, { maxPrice }).slice(0, max);
+  const weak = [...cards.values()].map(x => x.c).filter(c => !A.isLand(c) && !A.isBasic(c))
+    .filter(c => { const e = A.edhOf(d.cards, c); return !e || e.synergy < 0 || e.inclusion < 0.03; }).slice(0, 15);
+  let t = `\nDatos de EDHREC de este comandante (${d.decks ? d.decks.toLocaleString("es-ES") + " mazos" : "mazos reales"}):`;
+  if (top.length) t += `\nCartas con sinergia que NO están en la lista (sinergia = cuánto más se juegan con este comandante que con otros de sus colores):\n`
+    + top.map(x => `- ${x.c.name} (sinergia +${pctTxt(x.e.synergy)}, en el ${pctTxt(x.e.inclusion)} de sus mazos${prices ? `, ${x.c.price.toFixed(2)}` : ""})`).join("\n");
+  if (weak.length) t += `\nCartas de la lista que casi nadie juega con este comandante o con sinergia negativa: ${weak.map(c => c.name).join(", ")}.`;
+  return t;
+}
+const SYN_RULE = "Prioriza la sinergia con el comandante (las cartas con sinergia de EDHREC y las que potencian su texto) por encima de los staples genéricos: añade un staple solo si cubre un hueco del esqueleto que ninguna carta con sinergia cubre.";
+
 const chipList = names => (names || []).map(n => SF.cached(String(n))).filter(c => c && (deck.cards.has(A.key(c)) || deck.cmds.some(x => x.name === c.name)))
   .map(c => `<button class="chip" data-name="${esc(c.name)}">${esc(c.name)}</button>`).join("");
 
@@ -699,11 +734,13 @@ $("#btnOpt").onclick = async () => {
   if (!(await aiReady(out))) return;
   const s = A.analyze(deck), btn = $("#btnOpt"); btn.disabled = true;
   out.innerHTML = thinking("Claude está leyendo cómo está montado el mazo…");
+  const edh = await edhFor(deck.cmds);
   const prompt = `Lee este mazo de Commander y diagnostica cómo está montado.
 ${deckBrief(s)}
+${synergyBrief(edh, deck.cmds, deck.cards, { max: 20 })}
 Responde SOLO con JSON, con esta forma exacta:
 {"comandante":"1-2 frases: qué quiere hacer este comandante y cómo se le saca partido","estilo_actual":{"nombre":"nombre corto del arquetipo (p. ej. Aristócratas, Fichas, Voltron, Control, Combo)","descripcion":"1-2 frases sobre cómo gana y juega el mazo tal como está","cartas_clave":["5-8 cartas de la lista que definen ese estilo"]},"fuera_de_estilo":["hasta 8 cartas de la lista que no encajan con el estilo ni con el comandante"],"opciones":[{"nombre":"nombre corto","descripcion":"1 frase: cómo jugaría y qué cambia respecto al actual"}]}
-"opciones" son 3 estilos distintos y viables para este comandante; el primero es reforzar el estilo actual.`;
+"opciones" son 3 estilos distintos y viables para este comandante; el primero es reforzar el estilo actual. En "fuera_de_estilo" incluye sobre todo staples genéricos sin sinergia con el comandante.`;
   try { diag = await AI.askJSON(prompt, { effort: "low" }); renderDiag(diag); }
   catch (e) { out.innerHTML = `<p class="no">${esc(AI.errMsg(e))}</p>`; }
   finally { btn.disabled = false; }
@@ -723,8 +760,10 @@ function renderDiag(d) {
     </fieldset>
     <div class="row">
       <label class="f inline" for="optDepth">Cambios <select id="optDepth"><option value="8">Ligeros (6–8)</option><option value="14">Profundos (12–15)</option></select></label>
+      <label class="f inline" for="optBudget" title="Lo máximo que quieres gastar sumando todas las cartas que se añadan">Presupuesto de la mejora <input type="number" id="optBudget" min="0" step="5" inputmode="decimal" placeholder="Sin límite" value="${esc(store.get("forja-opt-budget") || "")}" style="width:110px"> ${symbol()}</label>
       <button class="btn primary ai" id="btnOpt2">Proponer mejoras para este estilo</button>
-    </div></div>`;
+    </div>
+    <p class="muted small" style="margin:0">El presupuesto es lo que te gastarías en total en las cartas nuevas. Las propuestas que lo superen se descartan.</p></div>`;
   $("#customStyle").addEventListener("focus", () => { out.querySelector('input[value="custom"]').checked = true; });
   $("#btnOpt2").onclick = () => optimizeFor(d);
 }
@@ -734,7 +773,10 @@ async function optimizeFor(d) {
   const style = sel === "custom" ? { nombre: $("#customStyle").value.trim() || "el que mejor funcione con este comandante", descripcion: "" }
     : ((d.opciones || [])[+sel] || { nombre: ea.nombre || "", descripcion: ea.descripcion || "" });
   const depth = +$("#optDepth").value, s = A.analyze(deck), tb = $("#optBracket").value;
+  const budget = Math.max(0, parseFloat(String($("#optBudget").value).replace(",", ".")) || 0);
+  store.set("forja-opt-budget", budget ? String(budget) : "");
   out.innerHTML = thinking(`Buscando mejoras para jugar «${style.nombre}»…`);
+  const edh = await edhFor(deck.cmds);
   const prompt = `Mejora este mazo de Commander para el estilo que quiere el jugador.
 ${deckBrief(s)}
 ${await newsBrief(s.ci)}
@@ -742,39 +784,49 @@ Diagnóstico previo. El comandante: ${d.comandante || ""}
 Estilo actual del mazo: ${ea.nombre || ""}. ${ea.descripcion || ""} Cartas que lo definen: ${(ea.cartas_clave || []).join(", ")}.
 Estilo que quiere el jugador: ${style.nombre}. ${style.descripcion || ""}
 Nivel de poder: ${tb ? "llevarlo al bracket B" + tb : "mantener el bracket actual (B" + s.bracket + ")"}.
-Cómo trabajar: primero piensa qué piezas necesita ese estilo con este comandante concreto (motores, sinergias, formas de ganar) y qué cartas de la lista no lo sirven o son las más flojas. Corta primero lo que no aporta al estilo. Mantén el esqueleto sano (tierras 35-38, ramp ~10, robo ~10, interacción ~9, 2-3 barridos) y no rompas lo que ya funciona.
+${budget ? `Presupuesto de la mejora: como máximo ${budget} ${currencyName()} SUMANDO todas las cartas añadidas. Elige cartas baratas cuando haga falta; al lado de cada carta con sinergia tienes su precio aproximado.` : ""}
+${synergyBrief(edh, deck.cmds, deck.cards, { prices: !!budget })}
+Cómo trabajar: primero piensa qué piezas necesita ese estilo con este comandante concreto (motores, sinergias, formas de ganar) y qué cartas de la lista no lo sirven o son las más flojas. Corta primero lo que no aporta al estilo ni al comandante, empezando por los staples genéricos sin sinergia. ${SYN_RULE} Mantén el esqueleto sano (tierras 35-38, ramp ~10, robo ~10, interacción ~9, 2-3 barridos) y no rompas lo que ya funciona.
 Responde SOLO con JSON, con esta forma exacta:
 {"resumen":"2-3 frases: cómo jugará el mazo después de los cambios","cortes":[{"carta":"Nombre exacto en inglés","motivo":"breve, por qué no sirve a ese estilo"}],"anadidos":[{"carta":"Nombre exacto en inglés","motivo":"breve, qué aporta a ese estilo y con el comandante","categoria":"motor|sinergia|remate|ramp|robo|removal|barrido|proteccion|tierra"}]}
 Reglas: entre ${depth - 2} y ${depth} cortes y el mismo número de añadidos. Los cortes deben estar en la lista. Los añadidos deben ser legales en Commander, dentro de la identidad de color ${s.ci || "incolora"}, no estar ya en la lista, y usar el nombre oficial en inglés.`;
   try {
     const r = await AI.askJSON(prompt, { onText: ({ text }) => { const m = out.querySelector(".status .msg"); const n = (text.match(/"carta"/g) || []).length; if (m && n) m.textContent = `Escribiendo propuestas… (${n})`; } });
-    await renderOpt(r, s, style.nombre);
+    await renderOpt(r, s, style.nombre, { budget, edh });
   } catch (e) {
     out.innerHTML = `<p class="no">${esc(AI.errMsg(e))}</p><div class="row"><button class="btn" id="backStyle">Volver a los estilos</button></div>`;
     $("#backStyle").onclick = () => renderDiag(d);
   }
 }
-async function renderOpt(r, s, styleName) {
+async function renderOpt(r, s, styleName, { budget = 0, edh = null } = {}) {
   const out = $("#aiOut");
   const cutsRaw = Array.isArray(r.cortes) ? r.cortes : [], addsRaw = Array.isArray(r.anadidos) ? r.anadidos : (r["añadidos"] || []);
   await SF.collection([...cutsRaw, ...addsRaw].map(x => String(x.carta || "")), { fuzzyLimit: 10 }).catch(() => {});
   const cuts = cutsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) })).filter(x => x.c && deck.cards.has(A.key(x.c)));
   const adds = addsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) }));
   const seenAdd = new Set(); // si la IA repite una carta, solo se ofrece una vez (Commander es singleton)
-  const okAdds = adds.filter(x => x.c && x.c.legal && !deck.cards.has(A.key(x.c)) && (!deck.cmds.length || A.subsetCI(x.c.ci, s.ci))
+  const valid = adds.filter(x => x.c && x.c.legal && !deck.cards.has(A.key(x.c)) && (!deck.cmds.length || A.subsetCI(x.c.ci, s.ci))
     && !seenAdd.has(A.key(x.c)) && seenAdd.add(A.key(x.c)));
-  const dropped = adds.length - okAdds.length;
+  // Presupuesto: se aceptan en el orden de la IA mientras la suma no lo supere.
+  let spent = 0, overBudget = 0;
+  const okAdds = valid.filter(x => { if (!budget) return true; if (spent + x.c.price > budget) { overBudget++; return false; } spent += x.c.price; return true; });
+  if (!budget) spent = okAdds.reduce((n, x) => n + x.c.price, 0);
+  const dropped = adds.length - valid.length;
+  // Etiqueta de sinergia en cada añadido, con los datos de EDHREC.
+  okAdds.forEach(x => { const e = edh && A.edhOf(edh.cards, x.c); if (e && e.synergy >= 0.05) x.syn = `sinergia +${pctTxt(e.synergy)}`; });
   out.innerHTML = `${styleName ? `<div class="eyebrow">Estilo: ${esc(styleName)}</div>` : ""}<p style="margin:0">${esc(r.resumen)}</p>
     <div class="sugg"><div><div class="eyebrow">Cortar</div>${cuts.map(x => sugHTML(x, "cut")).join("") || '<p class="muted">Sin cortes.</p>'}</div>
     <div><div class="eyebrow">Añadir</div>${okAdds.map(x => sugHTML(x, "add")).join("") || '<p class="muted">Sin añadidos válidos.</p>'}</div></div>
+    <p class="small" style="margin:0">Las cartas nuevas cuestan <b>${money(spent, 2)}</b>${budget ? ` de un presupuesto de ${money(budget)}` : ""}.</p>
     ${dropped ? `<p class="muted small" style="margin:0">${dropped} propuesta(s) descartadas por no existir, no ser legales, estar ya en el mazo o salirse de la identidad de color.</p>` : ""}
+    ${overBudget ? `<p class="lo small" style="margin:0">${overBudget} propuesta(s) descartadas por pasarse del presupuesto.</p>` : ""}
     <div class="row"><button class="btn primary" id="applyAll">Aplicar todo</button>${diag && styleName ? '<button class="btn" id="backStyle">Elegir otro estilo</button>' : ""}</div>`;
   $("#applyAll").onclick = () => out.querySelectorAll(".sug:not(.done) button[data-cut],.sug:not(.done) button[data-add]").forEach(b => b.click());
   if ($("#backStyle")) $("#backStyle").onclick = () => renderDiag(diag);
 }
 function sugHTML(x, kind) {
   const c = x.c;
-  return `<div class="sug">${c.small ? `<img class="th" src="${esc(c.small)}" alt="" loading="lazy">` : '<span class="th"></span>'}<span>${nameBtn(c)} ${manaHTML(c.cost)}${x.categoria ? ` <span class="tag">${esc(x.categoria)}</span>` : ""}${isPreview(c) ? ' <span class="tag new">nueva</span>' : ""}</span><button class="btn sm" data-${kind}="${esc(c.name)}">${kind === "cut" ? "Quitar" : "Añadir"}</button><span class="why">${esc(x.motivo)}</span></div>`;
+  return `<div class="sug">${c.small ? `<img class="th" src="${esc(c.small)}" alt="" loading="lazy">` : '<span class="th"></span>'}<span>${nameBtn(c)} ${manaHTML(c.cost)}${x.categoria ? ` <span class="tag">${esc(x.categoria)}</span>` : ""}${x.syn ? ` <span class="tag syn">${esc(x.syn)}</span>` : ""}${kind === "add" && c.price ? ` <span class="muted small mono">${cardMoney(c)}</span>` : ""}${isPreview(c) ? ' <span class="tag new">nueva</span>' : ""}</span><button class="btn sm" data-${kind}="${esc(c.name)}">${kind === "cut" ? "Quitar" : "Añadir"}</button><span class="why">${esc(x.motivo)}</span></div>`;
 }
 $("#aiOut").addEventListener("click", e => {
   const b = e.target.closest("[data-cut],[data-add]"); if (!b) return;
@@ -785,18 +837,27 @@ $("#aiOut").addEventListener("click", e => {
 
 $("#btnQuick").onclick = async () => {
   const out = $("#aiOut"); if (!deck.cards.size) { out.innerHTML = '<p class="lo">Primero analiza un mazo.</p>'; return; }
-  const s = A.analyze(deck); out.innerHTML = thinking("Buscando las cartas más jugadas en tus colores…");
-  let pool; try { pool = await SF.poolFor(s.ci); } catch (e) { out.innerHTML = `<p class="no">No se pudo consultar Scryfall.</p>`; return; }
+  const s = A.analyze(deck); out.innerHTML = thinking("Buscando las cartas que mejor encajan con tu comandante…");
+  let pool; try { pool = [...await SF.poolFor(s.ci)]; } catch (e) { out.innerHTML = `<p class="no">No se pudo consultar Scryfall.</p>`; return; }
+  const edh = await edhFor(deck.cmds), em = edhMap(edh), words = A.synergyWords(deck.cmds);
+  if (edh) pool.push(...[...edh.cards.values()].map(e => SF.cached(e.name)).filter(Boolean));
+  const fit = c => A.fitScore(c, { edh: em, words });
+  const why = c => { const e = em && A.edhOf(em, c); return e ? `en el ${pctTxt(e.inclusion)} de los mazos de tu comandante${e.synergy >= 0.05 ? `, sinergia +${pctTxt(e.synergy)}` : ""}` : A.matchesWords(c, words) ? "encaja con el texto de tu comandante" : `#${c.rank} en EDHREC`; };
   const inDeck = c => deck.cards.has(A.key(c)) || deck.cmds.some(x => x.name === c.name);
+  const seen = new Set(), cands = pool.filter(c => { const k = A.key(c); if (seen.has(k) || inDeck(c) || !c.legal || A.isBasic(c) || !A.subsetCI(c.ci, s.ci)) return false; seen.add(k); return true; }).sort((a, b) => fit(a) - fit(b));
   const sugg = [];
   for (const [k, flag, t, lab] of [["ramp", F.RAMP, 10, "Ramp"], ["draw", F.DRAW, 10, "Robo"], ["interaction", F.REM, 9, "Removal"], ["wipes", F.WIPE, 2, "Barrido"]]) {
     const miss = t - s[k]; if (miss <= 0) continue;
-    pool.filter(c => (c.flags & flag) && !A.isLand(c) && !inDeck(c) && c.legal && !sugg.some(x => x.c === c)).slice(0, Math.min(miss, 5))
-      .forEach(c => sugg.push({ c, categoria: lab, motivo: `Te faltan ${miss} de ${lab.toLowerCase()}; es de las más jugadas en tus colores (#${c.rank} en EDHREC).` }));
+    cands.filter(c => (c.flags & flag) && !A.isLand(c) && !sugg.some(x => x.c === c)).slice(0, Math.min(miss, 5))
+      .forEach(c => sugg.push({ c, categoria: lab, motivo: `Te faltan ${miss} de ${lab.toLowerCase()}; ${why(c)}.` }));
   }
-  const weak = [...deck.cards.values()].map(e => e.c).filter(c => !A.isLand(c) && !A.isBasic(c)).sort((a, b) => b.rank - a.rank).slice(0, Math.max(4, sugg.length));
-  out.innerHTML = `<p style="margin:0">Sugerencias calculadas con el esqueleto del mazo y la popularidad de cada carta. No tienen en cuenta la sinergia con el comandante.</p>
-    <div class="sugg"><div><div class="eyebrow">Candidatas a cortar</div>${weak.map(c => sugHTML({ c, motivo: `Poco jugada en Commander (${c.rank >= 99999 ? "sin ranking" : "#" + c.rank}).` }, "cut")).join("")}</div>
+  // Y las cartas con más sinergia que no tienes, aunque el esqueleto esté completo.
+  if (edh) synergyCards(edh, deck.cmds, inDeck).filter(x => !sugg.some(y => y.c === x.c)).slice(0, 6)
+    .forEach(x => sugg.push({ c: x.c, syn: `sinergia +${pctTxt(x.e.synergy)}`, motivo: `Se juega en el ${pctTxt(x.e.inclusion)} de los mazos de tu comandante, mucho más que con otros.` }));
+  const weak = [...deck.cards.values()].map(e => e.c).filter(c => !A.isLand(c) && !A.isBasic(c)).sort((a, b) => fit(b) - fit(a)).slice(0, Math.max(4, sugg.length));
+  const weakWhy = c => { const e = em && A.edhOf(em, c); return em ? (e ? `Solo en el ${pctTxt(e.inclusion)} de los mazos de tu comandante${e.synergy < 0 ? ", sinergia negativa" : ""}.` : "Casi nadie la juega con tu comandante.") : `Poco jugada en Commander (${c.rank >= 99999 ? "sin ranking" : "#" + c.rank}).`; };
+  out.innerHTML = `<p style="margin:0">${edh ? `Sugerencias calculadas con el esqueleto del mazo y los datos de EDHREC de tu comandante: primero lo que encaja con él, no solo lo más popular.` : "Sugerencias calculadas con el esqueleto del mazo y la popularidad de cada carta (EDHREC no tiene datos de este comandante)."}</p>
+    <div class="sugg"><div><div class="eyebrow">Candidatas a cortar</div>${weak.map(c => sugHTML({ c, motivo: weakWhy(c) }, "cut")).join("")}</div>
     <div><div class="eyebrow">Añadir</div>${sugg.map(x => sugHTML(x, "add")).join("") || '<p class="muted">El esqueleto ya cumple las cifras recomendadas.</p>'}</div></div>`;
 };
 
@@ -825,11 +886,13 @@ async function budgetNoAI() {
   const ci = A.ciUnion(deck.cmds), cap = Math.max(1, Math.round(target / 40));
   let pool;
   try {
-    const base = `${SF.ciQuery(ci)} legal:commander -t:basic game:paper ${currency()}<=${cap}`, words = A.themeWords(deck.cmds, "");
+    const base = `${SF.ciQuery(ci)} legal:commander -t:basic game:paper ${currency()}<=${cap}`, words = A.synergyWords(deck.cmds).filter(w => /^[a-z]+$/.test(w));
     pool = [...await SF.poolFor(ci), ...await SF.search(base, { pages: 3 }).catch(() => []),
       ...(words.length ? await SF.search(`${base} (${words.slice(0, 4).map(w => `t:${w} or o:${w}`).join(" or ")})`, { pages: 1 }).catch(() => []) : [])];
   } catch { bo.innerHTML = '<p class="no">No se pudo consultar Scryfall.</p>'; return; }
-  const r = A.budgetSwaps(deck, pool, target, await getBasics().catch(() => ({})));
+  const edh = await edhFor(deck.cmds);
+  if (edh) pool.push(...[...edh.cards.values()].map(e => SF.cached(e.name)).filter(Boolean));
+  const r = A.budgetSwaps(deck, pool, target, await getBasics().catch(() => ({})), { edh: edhMap(edh) });
   showSwaps(r, target);
 }
 async function budgetWithAI() {
@@ -838,12 +901,14 @@ async function budgetWithAI() {
   if (!(await aiReady(bo))) return;
   const s = A.analyze(deck), btn = $("#budgetAI"); btn.disabled = true;
   bo.innerHTML = thinking("Claude está buscando alternativas baratas…");
+  const edh = await edhFor(deck.cmds);
   const exp = [...deck.cards.values()].map(e => e.c).filter(c => !A.isBasic(c) && c.price >= 0.5).sort((a, b) => b.price - a.price).slice(0, 40);
   const prompt = `Abarata este mazo de Commander sin perder su plan de juego.
 Precio actual: ${Math.round(s.price)}; objetivo: ${Math.round(target)} como máximo (precios en ${currencyName()}).
 ${deckBrief(s)}
 Cartas más caras (precio por unidad): ${exp.map(c => `${c.name} (${c.price.toFixed(2)})`).join(", ")}
-Propón cambios uno a uno: quita una carta cara y pon otra mucho más barata que cumpla la misma función en el mazo y encaje con el comandante. Empieza por las más caras y para cuando el total baje del objetivo. No toques las tierras básicas.
+${synergyBrief(edh, deck.cmds, deck.cards, { prices: true, maxPrice: Math.max(1, target / 50) })}
+Propón cambios uno a uno: quita una carta cara y pon otra mucho más barata que cumpla la misma función en el mazo y encaje con el comandante. Empieza por las más caras y para cuando el total baje del objetivo. No toques las tierras básicas. Para sustituir, prefiere cartas baratas con sinergia con el comandante antes que staples genéricos.
 Responde SOLO con JSON, con esta forma exacta:
 {"resumen":"1-2 frases sobre cómo queda el mazo","cambios":[{"quitar":"Nombre exacto en inglés","poner":"Nombre exacto en inglés","motivo":"breve: qué función cumple igual"}]}
 Reglas: "quitar" debe estar en la lista. "poner" debe ser legal en Commander, estar dentro de la identidad de color ${s.ci || "incolora"}, no estar ya en la lista y costar menos de la mitad que la carta que sustituye.`;
@@ -954,13 +1019,16 @@ async function autoFill(o, cards, st) {
   const ci = A.ciUnion(o.cmds);
   st.innerHTML = '<span class="spin"></span><span>Buscando las cartas más jugadas en estos colores…</span>';
   const pool = [...await SF.poolFor(ci)];
-  const words = A.themeWords(o.cmds, o.theme);
+  st.innerHTML = '<span class="spin"></span><span>Buscando qué se juega con este comandante (EDHREC)…</span>';
+  const edh = await edhFor(o.cmds);
+  if (edh) pool.push(...[...edh.cards.values()].map(e => SF.cached(e.name)).filter(Boolean));
+  const words = A.synergyWords(o.cmds, o.theme).filter(w => /^[a-z]+$/.test(w));
   const boosted = new Set();
   if (words.length) {
     const q = `${SF.ciQuery(ci)} legal:commander game:paper (${words.slice(0, 4).map(w => `t:${w} or o:${w}`).join(" or ")})`;
     (await SF.search(q, { pages: 2 }).catch(() => [])).forEach(c => { pool.push(c); boosted.add(A.key(c)); });
   }
-  return A.fillDeck(o.cmds, cards, pool, await getBasics(), { ...o, boosted });
+  return A.fillDeck(o.cmds, cards, pool, await getBasics(), { ...o, boosted, edh: edhMap(edh) });
 }
 function loadBuilt(cmds, cards, note, id = null) {
   deck = { cmds, cards, unknown: [], illegal: [] }; setDeckId(id); syncText(); render();
@@ -972,7 +1040,7 @@ $("#btnGenAuto").onclick = async () => {
   if (!o.cmds.length) { st.innerHTML = '<span class="no">Elige un comandante de la lista.</span>'; return; }
   try {
     const cards = await autoFill(o, new Map(), st); st.innerHTML = "";
-    loadBuilt(o.cmds, cards, `<p class="muted" style="margin:0">Mazo generado automáticamente con las cartas más jugadas en estos colores y las cuotas de ramp, robo e interacción${o.theme ? `, priorizando «${esc(o.theme)}»` : ""}. Usa «Optimizar con IA» para afinar la sinergia.</p>`);
+    loadBuilt(o.cmds, cards, `<p class="muted" style="margin:0">Mazo generado automáticamente con lo que más se juega con este comandante (EDHREC) y las cuotas de ramp, robo e interacción${o.theme ? `, priorizando «${esc(o.theme)}»` : ""}. Usa «Optimizar con IA» para afinar la sinergia.</p>`);
   } catch (e) { st.innerHTML = `<span class="no">No se pudo consultar Scryfall: ${esc(e.message || e)}</span>`; }
 };
 $("#btnGenAI").onclick = async () => {
@@ -991,7 +1059,8 @@ Tema: ${o.theme || "la estrategia más fuerte y divertida para este comandante"}
 Nivel: ${brDesc}.
 ${o.budget ? `Presupuesto: cartas de hasta ${o.budget} ${currencyName()} cada una aproximadamente.` : ""}
 ${await newsBrief(ci)}
-Esqueleto: 36-37 tierras en total, unas 10 piezas de ramp, 10 de robo, 8-10 de interacción y 2-3 barridos, más sinergia y formas de ganar.
+${synergyBrief(await edhFor(o.cmds), o.cmds, new Map(), { max: 50, maxPrice: o.budget || 0 })}
+Esqueleto: 36-37 tierras en total, unas 10 piezas de ramp, 10 de robo, 8-10 de interacción y 2-3 barridos, más sinergia y formas de ganar. ${SYN_RULE}
 Responde SOLO con JSON con esta forma exacta:
 {"nombre":"nombre corto del mazo","estrategia":"2-3 frases","cartas":["Sol Ring","Command Tower","..."],"basicas":{"Forest":10}}
 "cartas" son las cartas no básicas, cada una una sola vez, con el nombre oficial en inglés, sin el comandante. "basicas" son las tierras básicas y cuántas de cada una. cartas + basicas deben sumar exactamente ${100 - o.cmds.length}. Todas legales en Commander y dentro de la identidad de color.`;

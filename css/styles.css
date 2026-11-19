@@ -472,3 +472,4 @@ header.top>.row{min-width:0;max-width:100%}
 .gprice input{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%;min-width:0;font-family:var(--f-mono)}
 .gprice .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:17px;padding:0 4px}
 .gprice .x:hover{color:var(--bad)}
+.tag.syn{border-color:var(--good);color:var(--good)}

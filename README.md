@@ -5,6 +5,7 @@ Constructor y analizador de mazos de **Magic: The Gathering** para el formato **
 - **Web publicada:** https://forja-edh-web.vercel.app
 - **Cartas, imágenes, precios (en $ o en €) y novedades:** en directo desde [Scryfall](https://scryfall.com).
 - **Combos:** con los datos gratuitos de [Commander Spellbook](https://commanderspellbook.com).
+- **Sinergia con el comandante:** con los datos públicos de [EDHREC](https://edhrec.com) de cada comandante.
 - **IA:** Claude. En local usa tu cuenta de Claude; en la web publicada está desactivada (o con clave de API si la configuras).
 - **Mis mazos en la nube:** [Supabase](https://supabase.com), entrando con GitHub o con tu email.
 
@@ -31,6 +32,14 @@ Todo funciona con planes gratuitos: Vercel, Supabase, Scryfall y Commander Spell
 
 La web tiene siete pestañas. Arriba a la derecha eliges la moneda de los precios: **$ USD** (TCGplayer) o **€ EUR** (Cardmarket); se recuerda en el navegador.
 
+### Sinergia con el comandante (en toda la web)
+
+Todo lo que sugiere cartas mira primero **qué encaja con tu comandante**, no solo qué es popular en general. Usa los datos de EDHREC de ese comandante: en qué porcentaje de sus mazos se juega cada carta y su **sinergia** (cuánto más se juega con él que con otros comandantes de sus colores). La popularidad general solo desempata.
+
+- **Generar automático**, **Paso a paso** (con la etiqueta «Sinergia» y el «% de mazos» en cada carta), **Sugerencias rápidas** (también propone cortar lo que casi nadie juega con tu comandante) y **A presupuesto** ordenan así las cartas.
+- La IA (**Optimizar**, **Que la IA lo genere**, **A presupuesto con IA** y **¿Encaja esta carta?**) recibe la lista de cartas con sinergia que te faltan y las del mazo que casi nadie juega con tu comandante, con la orden de preferir la sinergia a los staples genéricos.
+- Si EDHREC no tiene datos de un comandante (muy nuevo o poco jugado), se usa el texto del comandante (tipos de criatura y temas como fichas, contadores o cementerio).
+
 ### Analizar
 
 Pegas la lista de tu mazo (de Moxfield, Archidekt, ManaBox o cualquier texto «1 Nombre de carta») y obtienes:
@@ -48,7 +57,7 @@ Pegas la lista de tu mazo (de Moxfield, Archidekt, ManaBox o cualquier texto «1
 
 Además:
 
-- **Optimizar con IA**: lee cómo está montado el mazo y qué pide el comandante, te deja elegir el estilo (reforzar el actual, otro arquetipo o «a mi manera») y propone cortes y añadidos. Cada añadido se comprueba en Scryfall: que exista, que sea legal y que esté en tu identidad de color.
+- **Optimizar con IA**: lee cómo está montado el mazo y qué pide el comandante, te deja elegir el estilo (reforzar el actual, otro arquetipo o «a mi manera») y el **presupuesto de la mejora** (lo máximo que quieres gastar sumando las cartas nuevas), y propone cortes y añadidos. Cada añadido muestra su precio y su sinergia; los que se pasan del presupuesto se descartan. Cada añadido se comprueba en Scryfall: que exista, que sea legal y que esté en tu identidad de color.
 - **Radiografía**: plan de juego, cómo se juega cada fase, mulligan, puntos débiles y combos.
 - **Sugerencias rápidas** (sin IA): rellena lo que le falta al esqueleto con las cartas más jugadas en tus colores.
 - **A presupuesto**: escribes un precio máximo («déjamelo en 100 €») y propone cambios carta por carta, de la más cara a la más barata, hasta bajar de esa cifra. Sin IA cambia cada carta por una de las más jugadas que cumple la misma función (ramp por ramp, robo por robo, una criatura del tema por otra del tema…) y cuesta mucho menos; con IA, Claude elige los cambios pensando en la sinergia, y la web comprueba que cada cambio sea legal, esté en tus colores y salga más barato. Nada se aplica hasta que pulsas «Cambiar» o «Aplicar todos».
@@ -282,6 +291,7 @@ js/scryfall.js        acceso a la API de Scryfall (con pausa entre peticiones y 
 js/ai.js              cliente de /api/claude (respuesta en streaming)
 js/currency.js        moneda de los precios ($ o €)
 js/combos.js          combos del mazo (cliente de /api/combos)
+js/edhrec.js          datos de EDHREC de cada comandante: sinergia y % de mazos (cliente de /api/edhrec)
 js/compare.js         pestaña «Comparar»
 js/goldfish.js        pestaña «Probar mano»: partida en solitario y simulación
 js/collection.js      colección y lista de deseos (datos)
@@ -293,7 +303,8 @@ js/config.js          URL y clave publicable de Supabase (vacías = sin nube)
 supabase/schema.sql   tablas (mazos, sugerencias y colección), reglas de seguridad y funciones para compartir y para la comunidad
 api/claude.js         función de Vercel que llama a Claude con el SDK oficial
 api/combos.js         función de Vercel que consulta Commander Spellbook (su API no admite llamadas desde el navegador)
-dev/serve.ps1         servidor local: sirve la web y hace de /api/claude (con Claude Code) y de /api/combos
+api/edhrec.js         función de Vercel que lee los datos de EDHREC de cada comandante (tampoco admite llamadas desde el navegador)
+dev/serve.ps1         servidor local: sirve la web y hace de /api/claude (con Claude Code), /api/combos y /api/edhrec
 vercel.json           configuración de la función (hasta 300 s)
 package.json          dependencia de la función: @anthropic-ai/sdk
 ```
@@ -304,6 +315,7 @@ package.json          dependencia de la función: @anthropic-ai/sdk
 |---|---|---|
 | [Scryfall](https://scryfall.com/docs/api) | Cartas, imágenes, precios (TCGplayer y Cardmarket), legalidad, ranking de EDHREC | Gratis, sin cuenta |
 | [Commander Spellbook](https://commanderspellbook.com) | Combos | Gratis, sin cuenta |
+| [EDHREC](https://edhrec.com) | Qué se juega con cada comandante y su sinergia | Gratis, sin cuenta |
 | [Vercel](https://vercel.com) | Publicar la web (y la función de IA) | Hobby, gratis |
 | [Supabase](https://supabase.com) | Base de datos e inicio de sesión de Mis mazos | Free |
 | GitHub | Código e inicio de sesión con GitHub | Gratis |

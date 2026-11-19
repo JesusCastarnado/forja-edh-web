@@ -128,6 +128,24 @@ function Invoke-Combos($ctx) {
   }
 }
 
+# EDHREC: datos de cada comandante (como api/edhrec.js en Vercel). Solo lee json.edhrec.com.
+function Invoke-Edhrec($ctx) {
+  $res = $ctx.Response
+  $slug = [string]$ctx.Request.QueryString['c']
+  $res.ContentType = 'application/json; charset=utf-8'
+  if ($slug -notmatch '^[a-z0-9-]{1,160}$') { $res.StatusCode = 400; Send-Json $res @{ error = 'Comandante no válido' }; return }
+  try {
+    $wc = New-Object Net.WebClient
+    $wc.Encoding = $utf8
+    $txt = $wc.DownloadString("https://json.edhrec.com/pages/commanders/$slug.json")
+    $b = $utf8.GetBytes($txt)
+    $res.OutputStream.Write($b, 0, $b.Length)
+  } catch {
+    $res.StatusCode = 404
+    Send-Json $res @{ error = 'EDHREC no tiene datos de este comandante' }
+  }
+}
+
 $types = @{ '.html' = 'text/html; charset=utf-8'; '.js' = 'text/javascript; charset=utf-8'; '.css' = 'text/css; charset=utf-8'; '.json' = 'application/json'; '.svg' = 'image/svg+xml'; '.png' = 'image/png'; '.ico' = 'image/x-icon' }
 # Si el puerto está ocupado (otro servidor abierto, otro programa), prueba los siguientes.
 $l = $null
@@ -147,7 +165,9 @@ while ($l.IsListening) {
   $ctx = $l.GetContext()
   $path = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
   try {
-    if ($path -eq 'api/combos') {
+    if ($path -eq 'api/edhrec') {
+      if ($ctx.Request.HttpMethod -eq 'GET') { Invoke-Edhrec $ctx } else { $ctx.Response.StatusCode = 405 }
+    } elseif ($path -eq 'api/combos') {
       $origin = $ctx.Request.Headers['Origin']
       if ($ctx.Request.HttpMethod -ne 'POST') { $ctx.Response.StatusCode = 405 }
       elseif (($origin -and $origin -ne "http://localhost:$Port") -or $ctx.Request.ContentType -notlike 'application/json*') {
