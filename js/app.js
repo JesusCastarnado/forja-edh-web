@@ -358,6 +358,33 @@ $("#decksExport").onclick = () => {
   a.download = `forja-mis-mazos-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
+const deckNotes = d => [
+  ...(d.cmds.length ? [] : ["sin comandante detectado (ábrelo y elígelo en Analizar)"]),
+  ...(d.unknown.length ? [`${d.unknown.length} ${d.unknown.length === 1 ? "carta no encontrada" : "cartas no encontradas"} (${d.unknown.slice(0, 5).join(", ")}${d.unknown.length > 5 ? "…" : ""})`] : []),
+];
+
+// Pegar una lista directamente en Mis mazos.
+attachAC($("#pasteCmd"), { query: cmdQuery });
+$("#decksPasteBtn").onclick = () => { $("#decksPaste").hidden = false; $("#decksStatus").innerHTML = ""; $("#pasteText").focus(); };
+$("#pasteCancel").onclick = () => { $("#decksPaste").hidden = true; $("#pasteStatus").innerHTML = ""; };
+$("#pasteSave").onclick = async () => {
+  const st = $("#pasteStatus"), btn = $("#pasteSave"), text = $("#pasteText").value;
+  if (!text.trim()) { st.innerHTML = '<span class="lo">Pega una lista primero.</span>'; $("#pasteText").focus(); return; }
+  btn.disabled = true; st.innerHTML = '<span class="spin"></span><span>Buscando las cartas en Scryfall…</span>';
+  try {
+    const d = await buildDeck(text, [$("#pasteCmd").value.trim()].filter(Boolean));
+    if (!d.cmds.length && !d.cards.size) { st.innerHTML = '<span class="no">No se ha encontrado ninguna carta. Revisa que los nombres estén en inglés.</span>'; return; }
+    const name = $("#pasteName").value.trim() || d.cmds.map(c => c.name).join(" + ") || "Mazo pegado";
+    if (!Decks.upsert({ name, cmds: d.cmds, cards: d.cards })) { st.innerHTML = '<span class="no">El navegador no deja guardar (¿ventana privada o sin espacio?).</span>'; return; }
+    const notes = deckNotes(d);
+    $("#pasteText").value = $("#pasteName").value = $("#pasteCmd").value = ""; st.innerHTML = "";
+    $("#decksPaste").hidden = true; $("#decksFilter").value = ""; renderDecks();
+    $("#decksStatus").innerHTML = `<span class="ok">Guardado «${esc(name)}».</span>` + (notes.length ? `<ul class="issues">${notes.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
+  } catch (e) {
+    st.innerHTML = `<span class="no">No se pudo consultar Scryfall: ${esc(e.message || e)}.</span>`;
+  } finally { btn.disabled = false; }
+};
+
 // Importa una copia .json de Mis mazos o listas en texto (.txt de Moxfield, Archidekt, ManaBox…), una o varias a la vez.
 $("#decksImport").addEventListener("change", async e => {
   const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
@@ -374,8 +401,7 @@ $("#decksImport").addEventListener("change", async e => {
       const name = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
       if (!Decks.upsert({ name, cmds: d.cmds, cards: d.cards })) { notes.push(`${file.name}: el navegador no deja guardar más`); continue; }
       n++;
-      if (!d.cmds.length) notes.push(`${file.name}: sin comandante detectado (ábrelo y elígelo en Analizar)`);
-      if (d.unknown.length) notes.push(`${file.name}: ${d.unknown.length} ${d.unknown.length === 1 ? "carta no encontrada" : "cartas no encontradas"} (${d.unknown.slice(0, 5).join(", ")}${d.unknown.length > 5 ? "…" : ""})`);
+      notes.push(...deckNotes(d).map(x => `${file.name}: ${x}`));
     } catch (err) { notes.push(`${file.name}: ${err.message || "archivo no válido"}`); }
   }
   renderDecks();

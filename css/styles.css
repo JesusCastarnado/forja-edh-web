@@ -278,6 +278,8 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 .gdgroup h4{margin:0 0 4px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;border-bottom:2px solid var(--c);padding-bottom:3px}
 
 /* ---------- Mis mazos ---------- */
+.dpaste{margin-bottom:16px}
+.dpaste .side p{margin:0}
 .dstatus{display:grid;gap:4px;margin-bottom:14px;justify-items:start}
 .dstatus:empty{display:none}
 .decks{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px}
