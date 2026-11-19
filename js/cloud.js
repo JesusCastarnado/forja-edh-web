@@ -49,6 +49,13 @@ function cleanUrl() {
   history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
 }
 
+// Token de la sesión actual (lo usa la IA publicada para saber que eres tú). null si no hay sesión.
+export async function accessToken() {
+  if (!client || !user) return null;
+  try { const { data } = await client.auth.getSession(); return data && data.session ? data.session.access_token : null; }
+  catch { return null; }
+}
+
 export async function signIn(email) {
   if (!client) throw new Error("La nube no está disponible");
   const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });

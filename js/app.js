@@ -468,6 +468,9 @@ async function aiReady(out) {
     const code = st.mode === "local" && st.found ? "not_logged_in" : "not_configured";
     out.innerHTML = `<p class="lo">${esc(AI.errMsg({ code }))} Mientras tanto, prueba «Sugerencias rápidas» o «Generar automático».</p>`; return false;
   }
+  if (st.login && !Cloud.state().user) {
+    out.innerHTML = `<p class="lo">${esc(AI.errMsg({ code: "login_required" }))} <a href="#mazos">Ir a Mis mazos</a></p>`; return false;
+  }
   if (st.password && !AI.getPass()) { await askPass(); if (!AI.getPass()) { out.innerHTML = '<p class="lo">Hace falta la contraseña de la IA.</p>'; return false; } }
   return true;
 }
@@ -779,6 +782,7 @@ initGuided({
   AI.aiStatus().then(st => {
     $("#btnPass").hidden = !(st.ok && st.password);
     if (st.ok && st.mode === "local" && st.configured) $("#aiNote").textContent = "IA en modo local: usa tu cuenta de Claude a través de Claude Code en este ordenador.";
+    else if (st.ok && st.configured && st.login) $("#aiNote").textContent = "La IA de esta web es privada: solo funciona con la cuenta del dueño, entrando en «Mis mazos».";
     else if (!st.ok || !st.configured) $("#aiNote").textContent = (st.mode === "local" && st.found ? AI.errMsg({ code: "not_logged_in" }) : AI.errMsg({ code: "not_configured" })) + " El análisis, las novedades y el generador automático funcionan igual.";
   });
   const saved = store.get("forja-deck");

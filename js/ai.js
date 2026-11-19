@@ -1,4 +1,5 @@
 // Cliente de /api/claude (ver api/claude.js). Lee la respuesta en streaming (NDJSON).
+import { accessToken } from "./cloud.js";
 const ENDPOINT = "/api/claude";
 let statusPromise = null;
 
@@ -14,10 +15,13 @@ export const setPass = p => { try { localStorage.setItem("forja-pass", p); } cat
 
 export async function ask(prompt, { onText, signal, effort } = {}) {
   let r;
+  // En la web publicada, la sesión de «Mis mazos» demuestra al servidor que eres tú.
+  const token = await accessToken();
+  const headers = { "Content-Type": "application/json", "x-app-password": getPass() };
+  if (token) headers.Authorization = "Bearer " + token;
   try {
     r = await fetch(ENDPOINT, {
-      method: "POST", signal,
-      headers: { "Content-Type": "application/json", "x-app-password": getPass() },
+      method: "POST", signal, headers,
       body: JSON.stringify({ prompt, effort }),
     });
   } catch (e) {
@@ -65,10 +69,13 @@ export async function askJSON(prompt, opts) {
 
 const ERR = {
   auth: "La contraseña de la IA no es correcta. Pulsa «Clave IA» arriba y escríbela.",
+  login_required: "Para usar la IA, entra con tu cuenta en la pestaña «Mis mazos».",
+  not_allowed: "Esta cuenta no tiene acceso a la IA de esta web.",
+  unprotected: "La IA está desactivada hasta que se proteja: falta ALLOWED_EMAILS en Vercel (mira el README).",
+  rate_limited: "Se ha alcanzado el límite de uso de la API (o se ha acabado el saldo). Prueba en un rato.",
   not_configured: "La IA no está activa. En local, arranca la web con dev\\serve.ps1; publicada, añade ANTHROPIC_API_KEY en Vercel (mira el README).",
   not_logged_in: "Claude no tiene tu sesión iniciada en este ordenador. En PowerShell ejecuta una vez: powershell -ExecutionPolicy Bypass -File dev\\serve.ps1 -Login",
   server_key: "La clave de la API configurada en el servidor no es válida.",
-  rate_limited: "Se ha alcanzado el límite de uso de la API. Prueba en un rato.",
   refused: "Claude no ha querido responder a esta petición.",
   invalid_json: "La respuesta no venía en el formato esperado. Vuelve a intentarlo.",
   network: "No hay conexión con el servidor.",

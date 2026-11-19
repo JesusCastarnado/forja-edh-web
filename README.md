@@ -147,18 +147,26 @@ No abras `index.html` con doble clic: el navegador bloquea los módulos JavaScri
 |---|---|---|
 | Local (`serve.ps1`) | `claude.exe` con tu cuenta de Claude | Incluido en tu suscripción |
 | Vercel sin `ANTHROPIC_API_KEY` | Desactivada; los botones de IA avisan | 0 € |
-| Vercel con `ANTHROPIC_API_KEY` | API de Claude (`api/claude.js`) | Lo que gastes en la API |
+| Vercel con `ANTHROPIC_API_KEY` y `ALLOWED_EMAILS` | API de Claude (`api/claude.js`), solo para tu cuenta | Lo que gastes en la API (con límite) |
 
 La web publicada **no puede usar la IA de tu ordenador**, y es a propósito: el servidor local solo acepta peticiones de su propia página, para que ninguna otra web que visites pueda gastar tu cuenta de Claude.
 
 ### Activar la IA en Vercel (opcional, de pago)
 
-1. Crea una clave en https://console.anthropic.com (Settings → API Keys) y añade saldo. Es independiente de tu suscripción de Claude.
+La IA publicada es **privada**: solo responde a las cuentas que pongas en `ALLOWED_EMAILS`. La web manda la sesión de «Mis mazos» (GitHub o email) y la función comprueba con Supabase que eres tú. Sin sesión, o con otra cuenta, no gasta nada.
+
+1. **Clave y saldo** en https://console.anthropic.com (es independiente de tu suscripción de Claude):
+   - **Billing**: compra saldo (el mínimo es 5 $, más IVA). Deja **desactivada la recarga automática**, así nunca se gasta más de lo que cargues.
+   - **Limits**: pon un **límite de gasto mensual** (por ejemplo, 5 $).
+   - **API Keys → Create Key**: crea una clave y cópiala (solo se ve una vez).
 2. En Vercel → tu proyecto → **Settings → Environment Variables** añade:
-   - `ANTHROPIC_API_KEY`: tu clave.
-   - `APP_PASSWORD` (muy recomendable): una contraseña. Sin ella, cualquiera que encuentre la web puede gastar tu saldo. La web la pide una vez con el botón «Clave IA» y la recuerda en ese navegador.
+   - `ANTHROPIC_API_KEY`: la clave.
+   - `ALLOWED_EMAILS`: el email con el que entras en «Mis mazos» (lo pone en la caja: «Sesión iniciada como…»). Si hay varios, sepáralos con comas.
    - `CLAUDE_MODEL` (opcional): por defecto `claude-opus-5-5`. Con `claude-sonnet-5-5` cuesta la mitad.
-3. Vuelve a desplegar.
+3. **Deployments → ⋯ → Redeploy** en el último despliegue, para que lea las variables.
+4. En la web, entra en «Mis mazos» y usa la IA en Analizar o Construir.
+
+Si no pones `ALLOWED_EMAILS` (ni `APP_PASSWORD`, la protección antigua por contraseña), la función **se niega a usar la clave**, para que nadie pueda gastar tu saldo por un olvido. La IA en local (`serve.ps1`) no cambia: sigue usando tu cuenta de Claude sin clave.
 
 Coste aproximado con Claude Opus 5.5 (4 $ por millón de tokens de entrada y 20 $ por millón de salida):
 
@@ -313,6 +321,12 @@ Si llevas una semana sin usar la web, Supabase pausa el proyecto. Entra en https
 
 **La IA dice que no está activa**
 En la web publicada es lo normal si no has puesto `ANTHROPIC_API_KEY`. En local, arranca la web con `dev\serve.ps1`; si dice que Claude no tiene la sesión iniciada, ejecuta una vez `dev\serve.ps1 -Login`.
+
+**La IA publicada dice «entra con tu cuenta» o «esta cuenta no tiene acceso»**
+Entra en «Mis mazos» con la cuenta cuyo email pusiste en `ALLOWED_EMAILS`. Si sigue fallando, revisa que el email de la variable sea exactamente el que sale en «Sesión iniciada como…» y vuelve a desplegar en Vercel.
+
+**«Se ha alcanzado el límite de uso de la API (o se ha acabado el saldo)»**
+Has llegado al límite mensual o al saldo cargado en la consola de Anthropic. Recarga saldo o espera al mes siguiente.
 
 **«No encontradas en Scryfall»**
 Los nombres tienen que ir en inglés. Hay búsqueda difusa para erratas, pero no traduce del español.
