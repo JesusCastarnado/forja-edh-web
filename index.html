@@ -184,6 +184,12 @@
             <button class="btn sm" data-gmode="guided" aria-pressed="true">Guiado</button>
             <button class="btn sm" data-gmode="free" aria-pressed="false">Libre</button>
           </div>
+          <div class="gfilter">
+            <div class="eyebrow">Filtrar</div>
+            <label class="f" for="gMaxPrice">Precio máximo por carta
+              <span class="gprice"><input type="number" id="gMaxPrice" min="0" step="0.5" inputmode="decimal" placeholder="Sin límite"><span id="gMaxSym">$</span><button class="x" id="gMaxClear" type="button" aria-label="Quitar el límite de precio" hidden>×</button></span></label>
+            <p class="muted small" id="gMaxNote" style="margin:0"></p>
+          </div>
         </div>
         <button class="btn" id="gBasics">Completar con básicas</button>
         <div class="panel" id="gCmdPanel"></div>

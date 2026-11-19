@@ -3,11 +3,12 @@
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
-import { money, cardMoney } from "./currency.js";
+import { money, cardMoney, symbol, currencyName } from "./currency.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
 const SAVE = "forja-guiado";
+const PRICE = "forja-guiado-precio"; // precio máximo por carta (0 = sin límite), en la moneda elegida
 let H = null; // utilidades de app.js: esc, manaHTML, pipsHTML, toast, attachAC, thinking, cmdQuery, onAnalyze
 
 /* ---------- categorías ---------- */
@@ -61,7 +62,10 @@ const st = {
   pool: null, poolKey: "", shown: 30, freeList: null,
   words: [], synMemo: new Map(),
   pick: { colors: new Set(), exact: true, arch: 0, list: [], shown: 24, seq: 0 },
+  maxPrice: (() => { try { return Math.max(0, parseFloat(localStorage.getItem(PRICE)) || 0); } catch { return 0; } })(),
 };
+// Filtro de precio: las cartas más caras que el máximo no se sugieren (las que no tienen precio, sí).
+const priceOk = c => !st.maxPrice || c.price <= st.maxPrice;
 let booted = false;
 
 const entries = () => [...st.cards.values()];
@@ -115,11 +119,20 @@ async function loadPool() {
   }
   renderGrid();
 }
-function stepList() {
+function stepListAll() {
   if (!st.pool) return null;
   if (st.mode === "free") return st.freeList || st.pool;
   const k = STEPS[st.step].k;
   return st.pool.filter(k === "plan" ? (c => nonland(c) && catOf(c) === "plan") : is[k]);
+}
+function stepList() { const all = stepListAll(); return all && all.filter(priceOk); }
+function renderPriceNote() {
+  const all = stepListAll(), note = $("#gMaxNote");
+  $("#gMaxSym").textContent = symbol();
+  $("#gMaxClear").hidden = !st.maxPrice;
+  if (!st.maxPrice) { note.textContent = "Escribe un precio y no te sugeriremos cartas más caras."; return; }
+  const hidden = all ? all.filter(c => !priceOk(c)).length : 0;
+  note.textContent = `Solo cartas de hasta ${money(st.maxPrice, 2)}.` + (hidden ? ` Ocultas ${hidden} más caras en este paso.` : "");
 }
 
 /* ---------- piezas de HTML ---------- */
@@ -227,10 +240,11 @@ function renderHead() {
     <div class="row"><button class="btn" data-gnav="-1" ${st.step === 0 ? "disabled" : ""}>← Atrás</button>${last ? '<button class="btn primary" data-gact="analyze">Analizar mazo</button>' : '<button class="btn primary" data-gnav="1">Siguiente →</button>'}</div></div>`;
 }
 function renderGrid() {
+  renderPriceNote();
   const grid = $("#gGrid"), list = stepList();
   if (!list) { grid.innerHTML = H.thinking("Buscando las cartas más jugadas en tus colores…"); $("#gMore").hidden = true; return; }
   grid.innerHTML = list.slice(0, st.shown).map(c => tile(c, "pick")).join("")
-    || `<p class="muted">${st.mode === "free" ? "Sin resultados." : "No hay sugerencias para este paso en tus colores. Prueba el modo libre."}</p>`;
+    || `<p class="muted">${st.maxPrice && stepListAll().length ? `Ninguna carta de este paso cuesta ${money(st.maxPrice, 2)} o menos. Sube el precio máximo en «Filtrar».` : st.mode === "free" ? "Sin resultados." : "No hay sugerencias para este paso en tus colores. Prueba el modo libre."}</p>`;
   $("#gMore").hidden = list.length <= st.shown;
 }
 function renderDeck() {
@@ -295,7 +309,7 @@ Lista actual:
 ${list || "(vacía)"}
 Responde SOLO con JSON, con esta forma exacta:
 {"veredicto":"si|depende|no","resumen":"1-2 frases claras con la conclusión","a_favor":["2-4 razones cortas"],"en_contra":["0-4 razones cortas"],"cortar":[{"carta":"Nombre exacto en inglés","motivo":"breve"}],"alternativas":[{"carta":"Nombre exacto en inglés","motivo":"breve: por qué es mejor o qué aporta"}]}
-Reglas: valora la sinergia con el comandante, la curva, el nivel de poder (bracket) y qué hueco cubre. "cortar": ${inDeck ? "déjalo vacío" : `1-3 cartas de la lista que sacarías para meterla${total() + st.cmds.length < 100 ? " (puede ir vacío si aún hay sitio en el mazo)" : ""}`}. "alternativas": 0-3 cartas que no estén en la lista, legales en Commander y dentro de la identidad ${ci || "incolora"}, solo si el veredicto es "depende" o "no".`;
+Reglas: valora la sinergia con el comandante, la curva, el nivel de poder (bracket) y qué hueco cubre. "cortar": ${inDeck ? "déjalo vacío" : `1-3 cartas de la lista que sacarías para meterla${total() + st.cmds.length < 100 ? " (puede ir vacío si aún hay sitio en el mazo)" : ""}`}. "alternativas": 0-3 cartas que no estén en la lista, legales en Commander y dentro de la identidad ${ci || "incolora"}, solo si el veredicto es "depende" o "no".${st.maxPrice ? ` Las alternativas deben costar como máximo ${st.maxPrice} ${currencyName()} cada una.` : ""}`;
   try {
     const r = await AI.askJSON(prompt, { effort: "low" });
     const cutsRaw = Array.isArray(r.cortar) ? r.cortar : [], altsRaw = Array.isArray(r.alternativas) ? r.alternativas : [];
@@ -303,7 +317,7 @@ Reglas: valora la sinergia con el comandante, la curva, el nivel de poder (brack
     const cuts = cutsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) })).filter(x => x.c && st.cards.has(A.key(x.c)));
     const seen = new Set([A.key(c)]);
     const alts = altsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) }))
-      .filter(x => x.c && x.c.legal && A.subsetCI(x.c.ci, ci) && !st.cards.has(A.key(x.c)) && !seen.has(A.key(x.c)) && seen.add(A.key(x.c)));
+      .filter(x => x.c && x.c.legal && A.subsetCI(x.c.ci, ci) && priceOk(x.c) && !st.cards.has(A.key(x.c)) && !seen.has(A.key(x.c)) && seen.add(A.key(x.c)));
     const [vtxt, vcls] = VERD[r.veredicto] || VERD.depende;
     const li = arr => (Array.isArray(arr) ? arr : []).map(x => `<li>${e(x)}</li>`).join("");
     const row = (x, kind) => `<div class="fitline">${x.c.small ? `<img src="${e(x.c.small)}" alt="" loading="lazy">` : "<span></span>"}<div style="min-width:0"><button class="cn" data-name="${e(x.c.name)}">${e(x.c.name)}</button><div class="muted small">${e(x.motivo || "")}</div></div>
@@ -439,7 +453,17 @@ export function initGuided(helpers) {
     renderGrid();
   });
   $("#view-guiado").addEventListener("click", e => { const b = e.target.closest("[data-gact]"); if (b) onAction(b.dataset.gact); });
-  addEventListener("currencychange", () => { if (st.cmds.length && !$("#gBuild").hidden) { renderBar(); renderGrid(); } });
+  addEventListener("currencychange", () => { renderPriceNote(); if (st.cmds.length && !$("#gBuild").hidden) { renderBar(); renderGrid(); } });
+  const setMax = v => {
+    st.maxPrice = Math.max(0, parseFloat(String(v).replace(",", ".")) || 0);
+    try { localStorage.setItem(PRICE, String(st.maxPrice)); } catch {}
+    st.shown = 30; renderGrid();
+  };
+  let priceTimer = null;
+  $("#gMaxPrice").value = st.maxPrice || "";
+  $("#gMaxPrice").addEventListener("input", e => { clearTimeout(priceTimer); priceTimer = setTimeout(() => setMax(e.target.value), 300); });
+  $("#gMaxClear").onclick = () => { $("#gMaxPrice").value = ""; setMax(0); };
+  renderPriceNote();
 }
 
 // Abre un mazo ya hecho (por ejemplo, el de «Analizar») en el constructor para seguir editándolo.

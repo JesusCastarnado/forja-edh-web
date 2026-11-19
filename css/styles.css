@@ -465,3 +465,10 @@ header.top>.row{min-width:0;max-width:100%}
 .mtabs .btn{text-decoration:none}
 .seg .btn[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.pub{border-color:var(--good);color:var(--good)}
+
+/* ---------- Paso a paso: filtro de precio ---------- */
+.gfilter{display:grid;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.gprice{display:flex;align-items:center;gap:6px}
+.gprice input{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%;min-width:0;font-family:var(--f-mono)}
+.gprice .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:17px;padding:0 4px}
+.gprice .x:hover{color:var(--bad)}
