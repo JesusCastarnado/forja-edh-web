@@ -21,7 +21,8 @@ Todo funciona con planes gratuitos: Vercel, Supabase y Scryfall no cuestan nada,
 6. [Montarla desde cero](#montarla-desde-cero)
 7. [Costes y límites](#costes-y-límites)
 8. [Problemas frecuentes](#problemas-frecuentes)
-9. [Notas](#notas)
+9. [Próximas funciones](#próximas-funciones)
+10. [Notas](#notas)
 
 ---
 
@@ -348,6 +349,19 @@ Los nombres tienen que ir en inglés. Hay búsqueda difusa para erratas, pero no
 
 **Una carta sale en la categoría equivocada**
 Las etiquetas (ramp, robo, removal, protección…) se calculan leyendo el texto de reglas, así que alguna puede quedar mal clasificada.
+
+---
+
+## Próximas funciones
+
+Ideas apuntadas para hacer más adelante (todavía **no** están en la web):
+
+- [ ] **Comparar dos mazos**: pegas el mazo A y el mazo B y te dice las diferencias: cartas que solo están en uno, cartas en común, y cómo cambian la curva, el esqueleto (ramp, robo, removal…), el precio y el bracket.
+- [ ] **Combos del mazo**: detectar los combos que ya tiene el mazo y los que se quedan a una carta, con los datos gratuitos de [Commander Spellbook](https://commanderspellbook.com). Que cuenten para el bracket (combos de dos cartas tempranos).
+- [ ] **Probar mano más completo**: jugar los primeros turnos de prueba: robar cada turno, bajar tierras y cartas a un tablero sencillo y ver el maná disponible, para comprobar si el mazo arranca.
+- [ ] **Mazo a presupuesto**: un botón que cambie las cartas caras por alternativas baratas de la misma función, con un precio total máximo («déjamelo en 100 €»). Versión sin IA (las más jugadas de la misma categoría) y versión con IA (mejor elegidas).
+- [ ] **Precios en euros**: elegir moneda; Scryfall también da los precios de Cardmarket en €.
+- [ ] **Colección y lista de deseos**: marcar qué cartas tienes físicamente; el mazo dice cuántas te faltan y cuánto cuestan, y saca la lista de la compra. Se guardaría en la nube, como Mis mazos.
 
 ---
 
