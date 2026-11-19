@@ -2,6 +2,7 @@ import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
 import { initGuided, showGuided, editInGuided } from "./guided.js";
+import * as Decks from "./decks.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
@@ -214,6 +215,7 @@ function render() {
   if (s.avgCmc > 3.6) iss.push(`Curva alta (CMC medio ${s.avgCmc.toFixed(2)}); el mazo puede quedarse lento.`);
   $("#issues").innerHTML = iss.length ? iss.map(x => `<li>${x}</li>`).join("") : '<li class="ok">Sin problemas de legalidad ni de esqueleto.</li>';
   store.set("forja-deck", k);
+  renderSavedNote();
   renderNews(s.ci);
 }
 function rowHTML(c, q, bad, isCmd) {
@@ -268,8 +270,92 @@ $("#btnCopy").onclick = async () => {
 };
 $("#btnEditGuided").onclick = () => {
   if (!deck.cmds.length) { toast("Elige un comandante y pulsa «Analizar mazo» primero"); return; }
-  editInGuided(deck.cmds, deck.cards);
+  editInGuided(deck.cmds, deck.cards, savedDeck() ? deckId : null);
 };
+
+/* ---------- Mis mazos ---------- */
+let deckId = store.get("forja-deck-id") || null;
+const sameCmds = (d, cmds) => d && d.cmds.join("|") === cmds.map(c => c.name).join("|");
+// El mazo de Analizar está «guardado» si viene de Mis mazos y sigue teniendo el mismo comandante.
+const savedDeck = () => { const d = deckId && Decks.get(deckId); return sameCmds(d, deck.cmds) ? d : null; };
+function setDeckId(id) { deckId = id || null; store.set("forja-deck-id", deckId || ""); renderSavedNote(); }
+function renderSavedNote() {
+  const d = savedDeck(), p = $("#deckSaved");
+  p.hidden = !d; if (d) p.textContent = `Guardado en Mis mazos como «${d.name}». Pulsa «Guardar cambios» para actualizarlo.`;
+  $("#btnSaveDeck").textContent = d ? "Guardar cambios" : "Guardar en Mis mazos";
+}
+// Guarda (o actualiza, si ya existe con el mismo comandante) y devuelve el id, o null si se cancela.
+async function saveDeckFlow(cmds, cards, id) {
+  if (!cmds.length) { toast("Elige un comandante antes de guardar"); return null; }
+  let d = id ? Decks.get(id) : null;
+  if (!sameCmds(d, cmds)) d = null; // otro comandante: es otro mazo
+  const name = d ? d.name : await askName("Guardar en Mis mazos", cmds.map(c => c.name).join(" + "));
+  if (name === null) return null;
+  const nid = Decks.upsert({ id: d && d.id, name, cmds, cards });
+  if (!nid) { toast("El navegador no deja guardar (¿ventana privada o sin espacio?)"); return null; }
+  toast(d ? `«${d.name}» actualizado` : "Guardado en Mis mazos");
+  renderDecks();
+  return nid;
+}
+$("#btnSaveDeck").onclick = async () => { const id = await saveDeckFlow(deck.cmds, deck.cards, deckId); if (id) setDeckId(id); };
+
+const ago = t => {
+  const m = (Date.now() - t) / 6e4;
+  if (m < 1) return "ahora mismo"; if (m < 60) return `hace ${Math.round(m)} min`;
+  const h = m / 60; if (h < 24) return `hace ${Math.round(h)} h`;
+  const dd = h / 24; if (dd < 7) return `hace ${Math.round(dd)} ${Math.round(dd) === 1 ? "día" : "días"}`;
+  return "el " + new Date(t).toLocaleDateString("es-ES");
+};
+function renderDecks() {
+  const el = $("#decksList"), all = Decks.list(), f = SF.norm($("#decksFilter").value || "");
+  if (!all.length) { el.innerHTML = '<div class="panel"><p class="muted" style="margin:0">Aún no tienes mazos guardados. Analiza o construye uno y pulsa «Guardar en Mis mazos».</p></div>'; return; }
+  const list = f ? all.filter(d => SF.norm(d.name + " " + d.cmds.join(" ")).includes(f)) : all;
+  el.innerHTML = list.map(d => {
+    const s = d.stats || {};
+    return `<article class="deckcard" data-deck="${esc(d.id)}">
+      <div class="dhead"${s.art ? ` style="background-image:url('${esc(s.art)}')"` : ""}><div><div class="dname">${esc(d.name)}</div><div class="small muted">${esc(d.cmds.join(" + ")) || "Sin comandante"}</div></div></div>
+      <div class="dbody">
+        <div class="dstats">${pipsHTML(s.ci || "")}<span class="mono${s.total === 100 ? "" : " lo"}">${s.total ?? "?"}/100</span><span class="mono">${s.price ?? "?"} $</span><span class="mono">B${s.bracket ?? "?"}</span>${s.grade ? `<span class="grade">${esc(s.grade)}</span>` : ""}</div>
+        <div class="small muted">Actualizado ${ago(d.updated)}</div>
+        <div class="row"><button class="btn sm primary" data-dact="open">Abrir</button><button class="btn sm" data-dact="guided">Editar paso a paso</button><button class="btn sm" data-dact="copy">Copiar lista</button></div>
+        <div class="row dminor"><button class="btn sm" data-dact="rename">Renombrar</button><button class="btn sm" data-dact="dup">Duplicar</button><button class="btn sm danger" data-dact="del">Borrar</button></div>
+      </div></article>`;
+  }).join("") || '<p class="muted">Ningún mazo coincide con la búsqueda.</p>';
+}
+$("#decksFilter").addEventListener("input", renderDecks);
+$("#decksList").addEventListener("click", async e => {
+  const b = e.target.closest("[data-dact]"); if (!b) return;
+  const id = b.closest("[data-deck]").dataset.deck, d = Decks.get(id); if (!d) return;
+  const act = b.dataset.dact;
+  if (act === "open" || act === "guided") {
+    $("#deckText").value = d.text; $("#cmd1").value = ""; $("#cmd2").value = "";
+    if (act === "open") location.hash = "analizar";
+    await loadFromText(d.text); setDeckId(id); setCmdInputs(); render(); $("#aiOut").innerHTML = "";
+    if (act === "guided") { if (deck.cmds.length) editInGuided(deck.cmds, deck.cards, id); else { location.hash = "analizar"; toast("No se encontró el comandante de este mazo"); } }
+  } else if (act === "copy") {
+    navigator.clipboard.writeText(d.text).then(() => toast("Lista copiada"), () => toast("No se pudo copiar"));
+  } else if (act === "rename") {
+    const name = await askName("Renombrar mazo", d.name);
+    if (name) { Decks.rename(id, name); renderDecks(); renderSavedNote(); }
+  } else if (act === "dup") {
+    if (Decks.duplicate(id)) { renderDecks(); toast("Mazo duplicado"); } else toast("El navegador no deja guardar más");
+  } else if (act === "del") {
+    if (!confirm(`¿Borrar «${d.name}» de Mis mazos? No se puede deshacer.`)) return;
+    Decks.remove(id); if (deckId === id) setDeckId(null); renderDecks(); toast("Mazo borrado");
+  }
+});
+$("#decksExport").onclick = () => {
+  if (!Decks.list().length) { toast("No hay mazos que exportar"); return; }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([Decks.exportJSON()], { type: "application/json" }));
+  a.download = `forja-mis-mazos-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("#decksImport").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+  try { const n = Decks.importJSON(await file.text()); renderDecks(); toast(n ? `Importados ${n} mazos` : "No había mazos nuevos en la copia"); }
+  catch (err) { toast("No se pudo importar: " + (err.message || "archivo no válido")); }
+});
 attachAC($("#cmd1"), { query: cmdQuery });
 attachAC($("#cmd2"), { query: cmdQuery });
 attachAC($("#addCard"), {
@@ -463,8 +549,8 @@ async function autoFill(o, cards, st) {
   }
   return A.fillDeck(o.cmds, cards, pool, await getBasics(), { ...o, boosted });
 }
-function loadBuilt(cmds, cards, note) {
-  deck = { cmds, cards, unknown: [], illegal: [] }; syncText(); render();
+function loadBuilt(cmds, cards, note, id = null) {
+  deck = { cmds, cards, unknown: [], illegal: [] }; setDeckId(id); syncText(); render();
   $("#aiOut").innerHTML = note ? `<div>${note}</div>` : "";
   location.hash = "analizar";
 }
@@ -554,22 +640,38 @@ function askPass() {
 }
 $("#btnPass").onclick = () => askPass();
 
+const nameDlg = $("#nameDlg");
+function askName(title, value) {
+  return new Promise(res => {
+    $("#nameTitle").textContent = title; $("#nameInput").value = value || ""; nameDlg.returnValue = "";
+    nameDlg.showModal(); $("#nameInput").select();
+    // Se resuelve con el envío del formulario (inmediato) o, si se cierra con Esc, con cancel/close.
+    let settled = false;
+    const done = v => { if (settled) return; settled = true; res(v); };
+    nameDlg.querySelector("form").addEventListener("submit", e => done(e.submitter && e.submitter.value === "ok" || !e.submitter ? $("#nameInput").value.trim() : null), { once: true });
+    nameDlg.addEventListener("cancel", () => done(null), { once: true });
+    nameDlg.addEventListener("close", () => done(nameDlg.returnValue === "ok" ? $("#nameInput").value.trim() : null), { once: true });
+  });
+}
+
 /* ---------- navegación ---------- */
 let cmdsLoaded = false;
 function route() {
-  const views = ["analizar", "construir", "guiado", "mano"];
+  const views = ["analizar", "construir", "guiado", "mazos", "mano"];
   const v = views.includes(location.hash.slice(1)) ? location.hash.slice(1) : "analizar";
   views.forEach(x => { $("#view-" + x).hidden = x !== v; });
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
   if (v === "mano" && !hand.length && deck.cards.size) newGame(false); else if (v === "mano") renderHand();
   if (v === "construir" && !cmdsLoaded) { cmdsLoaded = true; renderNewCommanders(); }
   if (v === "guiado") showGuided();
+  if (v === "mazos") renderDecks();
 }
 window.addEventListener("hashchange", route);
 
 initGuided({
   esc, manaHTML, pipsHTML, toast, attachAC, thinking, cmdQuery,
-  onAnalyze: (cmds, cards) => loadBuilt(cmds, cards, '<p class="muted" style="margin:0">Mazo montado paso a paso. Usa «Optimizar con IA» para afinar la sinergia.</p>'),
+  onAnalyze: (cmds, cards, id) => loadBuilt(cmds, cards, '<p class="muted" style="margin:0">Mazo montado paso a paso. Usa «Optimizar con IA» para afinar la sinergia.</p>', id),
+  saveDeck: saveDeckFlow,
 });
 
 /* ---------- arranque ---------- */

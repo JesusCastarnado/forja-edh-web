@@ -18,6 +18,7 @@
       <a href="#analizar" data-view="analizar">Analizar</a>
       <a href="#construir" data-view="construir">Construir</a>
       <a href="#guiado" data-view="guiado">Paso a paso</a>
+      <a href="#mazos" data-view="mazos">Mis mazos</a>
       <a href="#mano" data-view="mano">Probar mano</a>
     </nav>
     <button class="btn sm" id="btnPass" hidden>Clave IA</button>
@@ -44,7 +45,9 @@
       <div class="row">
         <button class="btn primary" id="btnAnalyze">Analizar mazo</button>
         <button class="btn" id="btnCopy">Copiar lista</button>
+        <button class="btn" id="btnSaveDeck">Guardar en Mis mazos</button>
       </div>
+      <p class="muted small" id="deckSaved" style="margin:0" hidden></p>
       <div class="status" id="loadStatus"></div>
       <p class="muted small">Si la lista trae una sección «Commander» o la marca *CMDR*, el comandante se detecta solo. Sideboard y maybeboard se ignoran.</p>
     </div>
@@ -189,6 +192,23 @@
   </div>
 </section>
 
+<!-- ===================== MIS MAZOS ===================== -->
+<section id="view-mazos" hidden>
+  <div class="hero">
+    <h2>Mis mazos.</h2>
+    <p>Los mazos que guardas desde Analizar o Paso a paso. Se quedan en este navegador; para llevarlos a otro ordenador, exporta una copia y luego impórtala allí.</p>
+  </div>
+  <div class="row between" style="margin-bottom:14px">
+    <input type="text" id="decksFilter" autocomplete="off" placeholder="Buscar por nombre o comandante…" aria-label="Buscar mazo" style="width:min(340px,100%)">
+    <div class="row">
+      <button class="btn sm" id="decksExport">Exportar copia</button>
+      <label class="btn sm" for="decksImport" style="cursor:pointer">Importar copia</label>
+      <input type="file" id="decksImport" accept=".json,application/json" hidden>
+    </div>
+  </div>
+  <div class="decks" id="decksList"></div>
+</section>
+
 <!-- ===================== MANO ===================== -->
 <section id="view-mano" hidden>
   <div class="hero">
@@ -216,6 +236,15 @@
     <h3 style="margin:0">Clave de la IA</h3>
     <p class="muted small" style="margin:0">Este servidor pide una contraseña para usar la IA, y así nadie más gasta tu API.</p>
     <input type="text" id="passInput" autocomplete="off" aria-label="Contraseña">
+    <div class="row"><button class="btn primary" value="ok">Guardar</button><button class="btn" value="cancel">Cancelar</button></div>
+  </form>
+</dialog>
+
+<dialog id="nameDlg">
+  <form method="dialog" class="form">
+    <h3 style="margin:0" id="nameTitle">Guardar mazo</h3>
+    <label class="f" for="nameInput">Nombre del mazo
+      <input type="text" id="nameInput" autocomplete="off" maxlength="80"></label>
     <div class="row"><button class="btn primary" value="ok">Guardar</button><button class="btn" value="cancel">Cancelar</button></div>
   </form>
 </dialog>

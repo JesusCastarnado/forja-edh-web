@@ -277,4 +277,19 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 .gdgroup{margin-bottom:12px}
 .gdgroup h4{margin:0 0 4px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;border-bottom:2px solid var(--c);padding-bottom:3px}
 
+/* ---------- Mis mazos ---------- */
+.decks{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px}
+.deckcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:grid;min-width:0}
+.deckcard:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.dhead{position:relative;min-height:112px;display:flex;align-items:flex-end;padding:14px 16px;background:var(--raise) center 22%/cover}
+.dhead::before{content:"";position:absolute;inset:0;background:linear-gradient(0deg,var(--surface) 8%,color-mix(in srgb,var(--surface) 35%,transparent))}
+.dhead>*{position:relative;min-width:0}
+.dname{font-family:var(--f-display);font-size:21px;line-height:1.2;overflow-wrap:anywhere}
+.dbody{display:grid;gap:10px;padding:4px 16px 16px}
+.dstats{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:14px}
+.dstats .grade{font-family:var(--f-display);font-size:18px}
+.dminor .btn{background:none;border-color:transparent;color:var(--muted);padding-inline:6px}
+.dminor .btn:hover{color:var(--fg);border-color:var(--line)}
+.dminor .btn.danger:hover{color:var(--bad);border-color:var(--bad)}
+
 footer{margin-top:40px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:12px}
