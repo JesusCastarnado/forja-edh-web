@@ -81,8 +81,9 @@ Un constructor guiado:
    En cada paso salen sugerencias en tus colores. Un clic añade la carta y otro la quita. Las que encajan con el texto de tu comandante llevan la etiqueta **Sinergia**.
 3. **Modo libre**: busca cualquier carta en tu identidad de color (por nombre, tipo o con la sintaxis de Scryfall).
 4. **Completar con básicas**: rellena las tierras que faltan según tus símbolos de maná.
+5. **¿Encaja esta carta?**: escribe una carta que te guste y la IA te dice si encaja en el mazo (*Buena idea*, *Depende* o *Mejor no*), con razones a favor y en contra, qué cartas quitarías para meterla y alternativas mejores, cada una con su botón para añadir o quitar. Antes de llamar a la IA comprueba gratis que la carta exista, sea legal y entre en los colores de tu comandante.
 
-Arriba ves siempre las cartas que llevas (de 100), el precio, el coste medio, el bracket y los Game Changers; a la derecha, tu mazo por categorías y la curva. El borrador se guarda solo. Con **Analizar mazo** pasas a la pestaña Analizar.
+Arriba ves siempre las cartas que llevas (de 100), el precio, el coste medio, el bracket y los Game Changers; a la derecha, tu mazo por categorías y la curva. El borrador se guarda solo. Con **Analizar mazo** pasas a la pestaña Analizar, con **Guardar en Mis mazos** lo guardas y con **+ Nuevo mazo** vuelves a elegir comandante para empezar otro (si el actual tiene cambios sin guardar, te ofrece guardarlo antes).
 
 También sirve para **editar mazos que ya tienes**: desde Analizar o desde Mis mazos, pulsa «Editar paso a paso» y se abre en el primer paso incompleto.
 
@@ -90,7 +91,7 @@ También sirve para **editar mazos que ya tienes**: desde Analizar o desde Mis m
 
 Tus mazos guardados, cada uno con el arte del comandante, sus colores, cartas, precio, bracket, nota y fecha.
 
-- **Añadir**: «Pegar lista», «Importar archivo» (.txt de Moxfield, Archidekt o ManaBox, varios a la vez, o una copia .json) o guardando desde Analizar / Paso a paso.
+- **Añadir**: «+ Crear mazo» (te lleva a Paso a paso para elegir comandante), «Pegar lista», «Importar archivo» (.txt de Moxfield, Archidekt o ManaBox, varios a la vez, o una copia .json) o guardando desde Analizar / Paso a paso.
 - **En cada mazo**: Abrir, Editar paso a paso, Copiar lista, Renombrar, Duplicar y Borrar.
 - **Buscar** por nombre o comandante.
 - **Exportar copia**: descarga todos tus mazos en un .json.
