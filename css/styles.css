@@ -459,3 +459,9 @@ header.top>.row{min-width:0;max-width:100%}
 .gflog{margin:0;padding-left:0;list-style:none;display:grid;gap:3px;font-size:14px;max-height:340px;overflow:auto}
 .gflog li span{display:inline-block;min-width:2.6em}
 .simtab td{font-size:13px}
+
+/* ---------- Mis mazos / Comunidad ---------- */
+.mtabs{margin-bottom:16px}
+.mtabs .btn{text-decoration:none}
+.seg .btn[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.pub{border-color:var(--good);color:var(--good)}

@@ -103,6 +103,16 @@ Tus mazos guardados, cada uno con el arte del comandante, sus colores, cartas, p
 - **Nube**: entra con GitHub o con tu email y se sincronizan entre dispositivos (ver [Mis mazos y la nube](#mis-mazos-y-la-nube)).
 - **Compartir y recibir sugerencias**: «Compartir» te da un enlace; tus amigos marcan qué quitarían y qué añadirían, y tú decides qué aplicar (ver [Compartir un mazo](#compartir-un-mazo-y-recibir-sugerencias)).
 - Si tienes la colección rellena, cada mazo dice **cuántas cartas te faltan**.
+- **Publicar**: lo pone en la **Comunidad** con el nombre de autor que elijas (por defecto, tu usuario de GitHub). «✓ En la comunidad» lo quita.
+
+#### Comunidad
+
+La segunda pestaña de «Mis mazos» (`#comunidad`): los mazos que ha publicado todo el mundo, con su comandante, colores, precio, bracket, nota, autor y cuántas sugerencias tienen.
+
+- **Buscar** por nombre, comandante o autor.
+- **Ver y sugerir**: abre el mazo carta a carta y le marcas qué quitarías y qué añadirías, igual que con un enlace compartido. No hace falta cuenta. Su dueño lo recibe en «Mis mazos» como cualquier otra sugerencia.
+- **Guardar una copia**: lo copia a tus mazos para jugarlo o modificarlo.
+- De cada mazo solo se ve el nombre, los comandantes, la lista y el autor que eligió su dueño; nunca su email ni su cuenta.
 
 ### Comparar
 
@@ -250,7 +260,7 @@ Cada navegador recuerda la sesión, así que solo hay que entrar una vez por dis
 3. En **Mis mazos**, el mazo muestra **«N sugerencias nuevas»**. Ábrelas, desmarca lo que no quieras y pulsa **Aplicar las marcadas**: el mazo se abre en Analizar con los cambios hechos para que lo revises y pulses **Guardar cambios**. **Descartar** la quita de la lista.
 4. **Dejar de compartir** (en el mismo aviso del enlace) hace que el enlace deje de funcionar. Si vuelves a compartir, el enlace es nuevo.
 
-El enlace solo deja ver el nombre del mazo, los comandantes y la lista; nada de tu cuenta. Las sugerencias solo las ves tú.
+El enlace solo deja ver el nombre del mazo, los comandantes y la lista; nada de tu cuenta. Las sugerencias solo las ves tú. Dejar de compartir un mazo también lo quita de la comunidad.
 
 ### Copia de seguridad
 
@@ -280,7 +290,7 @@ js/decks.js           «Mis mazos» en el navegador
 js/cloud.js           sincronización de «Mis mazos» y de la colección con Supabase, inicio de sesión, compartir y sugerencias
 js/shared.js          vista del mazo compartido (#compartido/…) para sugerir cambios
 js/config.js          URL y clave publicable de Supabase (vacías = sin nube)
-supabase/schema.sql   tablas (mazos, sugerencias y colección), reglas de seguridad y funciones para compartir
+supabase/schema.sql   tablas (mazos, sugerencias y colección), reglas de seguridad y funciones para compartir y para la comunidad
 api/claude.js         función de Vercel que llama a Claude con el SDK oficial
 api/combos.js         función de Vercel que consulta Commander Spellbook (su API no admite llamadas desde el navegador)
 dev/serve.ps1         servidor local: sirve la web y hace de /api/claude (con Claude Code) y de /api/combos
@@ -378,6 +388,9 @@ Entra en «Mis mazos» con la cuenta cuyo email pusiste en `ALLOWED_EMAILS`. Si 
 
 **«Se ha alcanzado el límite de uso de la API (o se ha acabado el saldo)»**
 Has llegado al límite mensual o al saldo cargado en la consola de Anthropic. Recarga saldo o espera al mes siguiente.
+
+**«La comunidad aún no está activada»**
+Vuelve a ejecutar `supabase/schema.sql` entero en el **SQL Editor** de Supabase (añade las columnas y funciones de la comunidad; no borra nada).
 
 **«La colección no se guarda en la nube: falta su tabla en Supabase»**
 Vuelve a ejecutar `supabase/schema.sql` en el **SQL Editor** de Supabase (crea la tabla `collections` y no toca tus mazos). Mientras tanto, la colección se guarda en el navegador.

@@ -7,7 +7,7 @@ import { money } from "./currency.js";
 
 const $ = s => document.querySelector(s);
 let H = null; // utilidades de app.js: esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck
-const sh = { id: "", deck: null, name: "", cuts: new Map(), adds: new Map(), seq: 0 };
+const sh = { id: "", deck: null, name: "", author: "", pub: false, cuts: new Map(), adds: new Map(), seq: 0 };
 const NAME_KEY = "forja-nombre-amigo";
 
 export function initShared(helpers) {
@@ -42,7 +42,7 @@ export async function showShared(id) {
   try { sh.deck = await H.buildDeck(d.text); }
   catch { if (my === sh.seq) root.innerHTML = msg("No se pudo consultar Scryfall", "Comprueba la conexión y recarga la página."); return; }
   if (my !== sh.seq) return;
-  sh.name = d.name;
+  sh.name = d.name; sh.author = d.author || ""; sh.pub = !!d.published;
   renderAll();
 }
 const msg = (t, p) => `<div class="hero"><h2>${t}.</h2><p>${p}</p></div><p><a class="btn" href="#analizar" style="text-decoration:none">Ir a Forja EDH</a></p>`;
@@ -50,8 +50,8 @@ const msg = (t, p) => `<div class="hero"><h2>${t}.</h2><p>${p}</p></div><p><a cl
 function renderAll() {
   const e = H.esc, d = sh.deck, s = A.analyze(d), c0 = d.cmds[0];
   $("#shareView").innerHTML = `
-    <div class="hero"><div class="eyebrow">Te han compartido un mazo</div><h2>${e(sh.name)}.</h2>
-      <p>Pulsa las cartas que <b>quitarías</b> y busca a la derecha las que <b>añadirías</b>. Puedes explicar por qué; tu amigo verá tus sugerencias y decidirá cuáles aplicar.</p></div>
+    <div class="hero">${sh.pub ? '<a class="small" href="#comunidad">← Volver a la comunidad</a>' : ""}<div class="eyebrow">${sh.pub ? `Mazo de la comunidad${sh.author ? " · por " + e(sh.author) : ""}` : "Te han compartido un mazo"}</div><h2>${e(sh.name)}.</h2>
+      <p>Pulsa las cartas que <b>quitarías</b> y busca a la derecha las que <b>añadirías</b>. Puedes explicar por qué; ${sh.pub ? "su dueño" : "tu amigo"} verá tus sugerencias y decidirá cuáles aplicar.</p></div>
     <div class="panel sshead">
       ${c0 && c0.art ? `<img class="gthumb" src="${e(c0.art)}" alt="">` : ""}
       <div style="min-width:0"><div class="gname">${d.cmds.map(c => `<button class="cn" data-name="${e(c.name)}">${e(c.name)}</button>`).join(" + ") || "Sin comandante"}</div><div class="muted small">${H.pipsHTML(s.ci)}</div></div>

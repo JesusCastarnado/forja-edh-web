@@ -378,7 +378,7 @@ function renderDecks() {
   const el = $("#decksList"), all = Decks.list(), f = SF.norm($("#decksFilter").value || "");
   if (!all.length) { el.innerHTML = '<div class="panel"><p class="muted" style="margin:0">Aún no tienes mazos guardados. Analiza o construye uno y pulsa «Guardar en Mis mazos».</p></div>'; return; }
   const list = f ? all.filter(d => SF.norm(d.name + " " + d.cmds.join(" ")).includes(f)) : all;
-  const sugg = Cloud.state().suggestions || [];
+  const sugg = Cloud.state().suggestions || [], pub = Cloud.state().published || new Set();
   el.innerHTML = list.map(d => {
     const s = d.stats || {}, miss = deckMissingCount(d.text), nNew = sugg.filter(x => x.deck_id === d.id && x.status === "new").length, nAll = sugg.filter(x => x.deck_id === d.id).length;
     return `<article class="deckcard" data-deck="${esc(d.id)}">
@@ -387,7 +387,7 @@ function renderDecks() {
         <div class="dstats">${pipsHTML(s.ci || "")}<span class="mono${s.total === 100 ? "" : " lo"}">${s.total ?? "?"}/100</span><span class="mono">${deckPrice(s)}</span><span class="mono">B${s.bracket ?? "?"}</span>${s.grade ? `<span class="grade">${esc(s.grade)}</span>` : ""}${miss === null ? "" : `<span class="small ${miss ? "lo" : "ok"}">${miss ? `Te faltan ${miss}` : "Lo tienes todo"}</span>`}</div>
         <div class="small muted">Actualizado ${ago(d.updated)}</div>
         ${nAll ? `<button class="btn sm dsugg${nNew ? " new" : ""}" data-dact="sugg">${nNew ? `${nNew} ${nNew === 1 ? "sugerencia nueva" : "sugerencias nuevas"}` : `${nAll} ${nAll === 1 ? "sugerencia" : "sugerencias"}`}</button>` : ""}
-        <div class="row"><button class="btn sm primary" data-dact="open">Abrir</button><button class="btn sm" data-dact="guided">Editar paso a paso</button><button class="btn sm" data-dact="share">Compartir</button></div>
+        <div class="row"><button class="btn sm primary" data-dact="open">Abrir</button><button class="btn sm" data-dact="guided">Editar paso a paso</button><button class="btn sm" data-dact="share">Compartir</button>${pub.has(d.id) ? '<button class="btn sm pub" data-dact="pub" title="Está en la comunidad. Pulsa para quitarlo">✓ En la comunidad</button>' : '<button class="btn sm" data-dact="pub" title="Publícalo para que otros jugadores lo vean y te sugieran cambios">Publicar</button>'}</div>
         <div class="row dminor"><button class="btn sm" data-dact="copy">Copiar lista</button><button class="btn sm" data-dact="rename">Renombrar</button><button class="btn sm" data-dact="dup">Duplicar</button><button class="btn sm danger" data-dact="del">Borrar</button></div>
       </div></article>`;
   }).join("") || '<p class="muted">Ningún mazo coincide con la búsqueda.</p>';
@@ -406,6 +406,8 @@ $("#decksList").addEventListener("click", async e => {
     navigator.clipboard.writeText(d.text).then(() => toast("Lista copiada"), () => toast("No se pudo copiar"));
   } else if (act === "share") {
     shareDeck(d);
+  } else if (act === "pub") {
+    publishDeck(d);
   } else if (act === "sugg") {
     openSuggestions(d);
   } else if (act === "rename") {
@@ -418,6 +420,81 @@ $("#decksList").addEventListener("click", async e => {
     Decks.remove(id); if (deckId === id) setDeckId(null); renderDecks(); toast("Mazo borrado");
   }
 });
+/* ---------- comunidad ---------- */
+async function publishDeck(d) {
+  const st = $("#decksStatus"), cs = Cloud.state();
+  if (!cs.configured) { st.innerHTML = '<span class="lo">Para publicar hace falta la nube (mira el README).</span>'; return; }
+  if (!cs.user) { st.innerHTML = '<span class="lo">Para publicar un mazo en la comunidad, entra primero con tu cuenta en la caja de arriba.</span>'; $("#cloudBox").scrollIntoView({ block: "nearest" }); return; }
+  if (cs.published.has(d.id)) {
+    if (!confirm(`¿Quitar «${d.name}» de la comunidad? Las sugerencias que ya tengas se quedan.`)) return;
+    try { await Cloud.unpublish(d.id); toast("Quitado de la comunidad"); st.innerHTML = ""; }
+    catch (e) { st.innerHTML = `<span class="no">No se pudo quitar: ${esc(e.message || e)}</span>`; }
+    renderDecks(); return;
+  }
+  const author = await askName(`Publicar «${d.name}» en la comunidad`, store.get("forja-autor") || Cloud.defaultAuthor(), "Tu nombre en la comunidad (lo verán los demás)");
+  if (author === null) return;
+  if (!author) { toast("Escribe un nombre para publicar"); return; }
+  store.set("forja-autor", author);
+  st.innerHTML = '<span class="spin"></span><span>Publicando…</span>';
+  try {
+    await Cloud.publish(d.id, author);
+    st.innerHTML = `<span class="ok">«${esc(d.name)}» ya está en la <a href="#comunidad">comunidad</a>. Las sugerencias que te manden te llegarán aquí, en su tarjeta.</span>`;
+  } catch (e) { st.innerHTML = `<span class="no">No se pudo publicar: ${esc(e.message || e)}</span>`; }
+  renderDecks();
+}
+
+const comm = { q: "", offset: 0, items: [], seq: 0, done: true, timer: null };
+async function loadCommunity(reset) {
+  const st = $("#commStatus"), my = ++comm.seq;
+  if (reset) { comm.offset = 0; comm.items = []; comm.done = true; $("#commList").innerHTML = ""; $("#commMore").hidden = true; }
+  if (!Cloud.configured()) { st.innerHTML = '<span class="lo">La comunidad necesita la nube (mira el README).</span>'; return; }
+  st.innerHTML = '<span class="spin"></span><span>Cargando la comunidad…</span>';
+  try {
+    const rows = await Cloud.communityDecks(comm.q, comm.offset, 30);
+    if (my !== comm.seq) return;
+    comm.items.push(...rows); comm.offset += rows.length; comm.done = rows.length < 30;
+    st.innerHTML = ""; renderCommunity();
+  } catch (e) { if (my === comm.seq) st.innerHTML = `<span class="no">No se pudo cargar la comunidad: ${esc(e.message || e)}</span>`; }
+}
+function renderCommunity() {
+  $("#commList").innerHTML = comm.items.map(d => {
+    const s = d.stats || {}, n = +d.suggestions || 0, when = d.published_at ? ago(Date.parse(d.published_at)) : ago(+d.updated);
+    return `<article class="deckcard">
+      <div class="dhead"${s.art ? ` style="background-image:url('${esc(s.art)}')"` : ""}><div><div class="dname">${esc(d.name)}</div><div class="small muted">${esc((d.cmds || []).join(" + ")) || "Sin comandante"}</div></div></div>
+      <div class="dbody">
+        <div class="dstats">${pipsHTML(s.ci || "")}<span class="mono${s.total === 100 ? "" : " lo"}">${s.total ?? "?"}/100</span><span class="mono">${deckPrice(s)}</span><span class="mono">B${s.bracket ?? "?"}</span>${s.grade ? `<span class="grade">${esc(s.grade)}</span>` : ""}</div>
+        <div class="small muted">Por <b>${esc(d.author || "Anónimo")}</b>${d.mine ? ' <span class="tag gc">Tuyo</span>' : ""} · publicado ${when}${n ? ` · ${n} ${n === 1 ? "sugerencia" : "sugerencias"}` : ""}</div>
+        <div class="row"><a class="btn sm primary" href="#compartido/${esc(d.share_id)}" style="text-decoration:none">${d.mine ? "Ver" : "Ver y sugerir"}</a><button class="btn sm" data-cact="copy" data-share="${esc(d.share_id)}">Guardar una copia</button></div>
+      </div></article>`;
+  }).join("") || (comm.q ? '<p class="muted">Ningún mazo coincide con la búsqueda.</p>'
+    : '<div class="panel"><p class="muted" style="margin:0">Todavía no hay mazos publicados. Publica uno de los tuyos desde «Mis mazos» con el botón «Publicar».</p></div>');
+  $("#commMore").hidden = comm.done;
+}
+$("#commFilter").addEventListener("input", () => {
+  clearTimeout(comm.timer);
+  comm.timer = setTimeout(() => { comm.q = $("#commFilter").value.trim(); loadCommunity(true); }, 350);
+});
+$("#commReload").onclick = () => loadCommunity(true);
+$("#commMore").onclick = () => loadCommunity(false);
+$("#commList").addEventListener("click", async e => {
+  const b = e.target.closest('[data-cact="copy"]'); if (!b) return;
+  b.disabled = true; const label = b.textContent; b.textContent = "Guardando…";
+  try {
+    const d = await Cloud.sharedDeck(b.dataset.share);
+    if (!d) throw new Error("Este mazo ya no está publicado");
+    const built = await buildDeck(d.text);
+    if (!Decks.upsert({ name: `${d.name}${d.author ? ` (de ${d.author})` : ""}`, cmds: built.cmds, cards: built.cards })) throw new Error("el navegador no deja guardar");
+    b.textContent = "Guardada en Mis mazos"; toast("Copia guardada en Mis mazos");
+  } catch (err) { b.disabled = false; b.textContent = label; toast("No se pudo guardar: " + (err.message || err)); }
+});
+function setMazosTab(sub) {
+  const isComm = sub === "comm";
+  $("#mineHero").hidden = isComm; $("#mineBox").hidden = isComm;
+  $("#commHero").hidden = !isComm; $("#commBox").hidden = !isComm;
+  document.querySelectorAll("[data-mtab]").forEach(a => a.setAttribute("aria-selected", String((a.dataset.mtab === "comm") === isComm)));
+  if (isComm) loadCommunity(true); else renderDecks();
+}
+
 /* ---------- compartir y sugerencias de amigos ---------- */
 async function shareDeck(d) {
   const st = $("#decksStatus");
@@ -959,7 +1036,7 @@ function updateBudgetLabels() { document.querySelectorAll("#bBudget option[data-
 updateBudgetLabels();
 addEventListener("currencychange", () => {
   curSel.value = currency(); updateBudgetLabels(); render();
-  if (!$("#view-mazos").hidden) renderDecks();
+  if (!$("#view-mazos").hidden) { renderDecks(); if (!$("#commBox").hidden) renderCommunity(); }
 });
 
 /* ---------- contraseña de la IA ---------- */
@@ -973,9 +1050,9 @@ function askPass() {
 $("#btnPass").onclick = () => askPass();
 
 const nameDlg = $("#nameDlg");
-function askName(title, value) {
+function askName(title, value, label = "Nombre del mazo") {
   return new Promise(res => {
-    $("#nameTitle").textContent = title; $("#nameInput").value = value || ""; nameDlg.returnValue = "";
+    $("#nameTitle").textContent = title; $("#nameLabel").textContent = label; $("#nameInput").value = value || ""; nameDlg.returnValue = "";
     nameDlg.showModal(); $("#nameInput").select();
     // Se resuelve con el envío del formulario (inmediato) o, si se cierra con Esc, con cancel/close.
     let settled = false;
@@ -999,7 +1076,8 @@ function route() {
     document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", "false"));
     showShared(shared[1]); return;
   }
-  const v = views.includes(h) ? h : "analizar";
+  // #comunidad es la segunda pestaña de «Mis mazos».
+  const v = h === "comunidad" ? "mazos" : views.includes(h) ? h : "analizar";
   views.forEach(x => { $("#view-" + x).hidden = x !== v; });
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
   if (v === "mano") showGoldfish();
@@ -1007,7 +1085,7 @@ function route() {
   if (v === "coleccion") showCollection();
   if (v === "construir" && !cmdsLoaded) { cmdsLoaded = true; renderNewCommanders(); }
   if (v === "guiado") showGuided();
-  if (v === "mazos") { renderDecks(); renderCloud(); }
+  if (v === "mazos") { setMazosTab(h === "comunidad" ? "comm" : "mine"); renderCloud(); }
 }
 window.addEventListener("hashchange", route);
 

@@ -8,12 +8,12 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/+esm"; // admite las claves «publishable»
 const COLS = "id,name,cmds,text,stats,created,updated,deleted";
 
-let client = null, user = null, syncing = null, timer = null, lastSync = 0, lastError = "", suggestions = [], colError = "";
+let client = null, user = null, syncing = null, timer = null, lastSync = 0, lastError = "", suggestions = [], colError = "", published = new Set();
 let readyResolve; const readyP = new Promise(r => { readyResolve = r; });
 const listeners = new Set();
 
 export const configured = () => Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-export const state = () => ({ configured: configured(), ready: !!client, user, lastSync, syncing: !!syncing, error: lastError, suggestions, colError });
+export const state = () => ({ configured: configured(), ready: !!client, user, lastSync, syncing: !!syncing, error: lastError, suggestions, colError, published });
 // Espera a que la nube esté lista (o a que se sepa que no hay nube). Devuelve true si hay cliente.
 export const whenReady = () => configured() ? readyP.then(() => !!client) : Promise.resolve(false);
 export const onState = cb => listeners.add(cb);
@@ -74,7 +74,7 @@ export async function signInWithGitHub() {
 }
 export async function signOut() {
   if (client) await client.auth.signOut();
-  user = null; lastSync = 0; emit();
+  user = null; lastSync = 0; published = new Set(); emit();
 }
 
 function schedule() { if (!user) return; clearTimeout(timer); timer = setTimeout(sync, 1500); }
@@ -95,6 +95,7 @@ async function run() {
     lastSync = Date.now(); lastError = "";
     await syncCollection();
     await loadSuggestions();
+    await loadPublished();
     return changed;
   } catch (e) {
     lastError = "Error al sincronizar: " + (e.message || e);
@@ -142,8 +143,45 @@ export async function shareLink(deckId) {
 }
 export async function unshare(deckId) {
   if (!client || !user) return;
-  const { error } = await client.from("decks").update({ share_id: null }).eq("id", deckId);
+  // Sin enlace tampoco puede estar en la comunidad.
+  const { error } = await client.from("decks").update({ share_id: null, published: false }).eq("id", deckId);
   if (error) throw error;
+  published.delete(deckId); emit();
+}
+
+/* ---------- comunidad ---------- */
+const COMMUNITY_HINT = "La comunidad aún no está activada: vuelve a ejecutar supabase/schema.sql en el SQL Editor de Supabase.";
+const communityError = e => { const m = String((e && e.message) || e); return /community_decks|published|PGRST20|42703|42883/.test(m + (e && e.code)) ? new Error(COMMUNITY_HINT) : e; };
+// Nombre de autor que se propone al publicar: el usuario de GitHub o la parte del email antes de la @.
+export function defaultAuthor() {
+  const m = (user && user.user_metadata) || {};
+  return String(m.user_name || m.preferred_username || m.name || m.full_name || (user && user.email || "").split("@")[0] || "").slice(0, 40);
+}
+// Publica un mazo en la comunidad (le crea enlace si no tenía).
+export async function publish(deckId, author) {
+  if (!client || !user) throw new Error("Entra con tu cuenta para publicar mazos");
+  await shareLink(deckId);
+  const { error } = await client.from("decks").update({ published: true, author: String(author || "").trim().slice(0, 40), published_at: new Date().toISOString() }).eq("id", deckId);
+  if (error) throw communityError(error);
+  published.add(deckId); emit();
+}
+export async function unpublish(deckId) {
+  if (!client || !user) return;
+  const { error } = await client.from("decks").update({ published: false }).eq("id", deckId);
+  if (error) throw communityError(error);
+  published.delete(deckId); emit();
+}
+// Mazos de la comunidad (se pueden ver sin cuenta).
+export async function communityDecks(search = "", offset = 0, limit = 30) {
+  if (!(await whenReady())) throw new Error("La nube no está configurada en esta web");
+  const { data, error } = await client.rpc("community_decks", { p_search: search, p_limit: limit, p_offset: offset });
+  if (error) throw communityError(error);
+  return data || [];
+}
+async function loadPublished() {
+  if (!client || !user) { published = new Set(); return; }
+  const { data, error } = await client.from("decks").select("id").eq("published", true).eq("deleted", false);
+  if (!error) published = new Set((data || []).map(r => r.id));
 }
 // Mazo compartido (lo puede leer cualquiera con el enlace, sin cuenta). null si no existe.
 export async function sharedDeck(shareId) {

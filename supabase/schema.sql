@@ -29,6 +29,12 @@ create policy "Cada uno sus mazos" on public.decks
 -- Enlace de compartir: si un mazo tiene share_id, cualquiera con el enlace puede verlo.
 alter table public.decks add column if not exists share_id uuid unique;
 
+-- Comunidad: un mazo publicado (published) sale en la lista de la comunidad con el nombre de autor que eligió su dueño.
+alter table public.decks add column if not exists published boolean not null default false;
+alter table public.decks add column if not exists author text not null default '';
+alter table public.decks add column if not exists published_at timestamptz;
+create index if not exists decks_public_idx on public.decks (published_at desc) where published and not deleted;
+
 create table if not exists public.suggestions (
   id        uuid primary key default gen_random_uuid(),
   owner     uuid not null references auth.users (id) on delete cascade,  -- dueño del mazo
@@ -53,12 +59,31 @@ create policy "Gestionar sugerencias de mis mazos" on public.suggestions for upd
 drop policy if exists "Borrar sugerencias de mis mazos" on public.suggestions;
 create policy "Borrar sugerencias de mis mazos" on public.suggestions for delete to authenticated using (owner = auth.uid());
 
--- Leer un mazo compartido (solo nombre, comandantes, lista y estadísticas; nada del dueño).
-create or replace function public.shared_deck(p_share uuid)
-returns table (name text, cmds jsonb, text text, stats jsonb, updated bigint)
+-- Leer un mazo compartido (nombre, comandantes, lista, estadísticas y, si está en la comunidad, el autor;
+-- nada de la cuenta del dueño). Se borra y se crea de nuevo porque lo que devuelve ha cambiado con el tiempo.
+drop function if exists public.shared_deck(uuid);
+create function public.shared_deck(p_share uuid)
+returns table (name text, cmds jsonb, text text, stats jsonb, updated bigint, author text, published boolean)
 language sql stable security definer set search_path = public as $$
-  select d.name, d.cmds, d.text, d.stats, d.updated
+  select d.name, d.cmds, d.text, d.stats, d.updated, d.author, d.published
   from public.decks d where d.share_id = p_share and not d.deleted limit 1;
+$$;
+
+-- Lista de la comunidad: los mazos publicados, con buscador por nombre, comandante o autor.
+create or replace function public.community_decks(p_search text default '', p_limit int default 30, p_offset int default 0)
+returns table (share_id uuid, name text, cmds jsonb, stats jsonb, author text, updated bigint, published_at timestamptz, mine boolean, suggestions bigint)
+language sql stable security definer set search_path = public as $$
+  select d.share_id, d.name, d.cmds, d.stats, d.author, d.updated, d.published_at,
+         coalesce(d.user_id = auth.uid(), false),
+         (select count(*) from public.suggestions s where s.share_id = d.share_id)
+  from public.decks d
+  where d.published and not d.deleted and d.share_id is not null
+    and (coalesce(p_search, '') = ''
+         or d.name ilike '%' || p_search || '%'
+         or d.cmds::text ilike '%' || p_search || '%'
+         or d.author ilike '%' || p_search || '%')
+  order by d.published_at desc nulls last
+  limit least(greatest(coalesce(p_limit, 30), 1), 100) offset greatest(coalesce(p_offset, 0), 0);
 $$;
 
 -- Enviar una sugerencia a un mazo compartido, con límites de tamaño.
@@ -81,6 +106,7 @@ begin
 end $$;
 
 grant execute on function public.shared_deck(uuid) to anon, authenticated;
+grant execute on function public.community_decks(text, int, int) to anon, authenticated;
 grant execute on function public.suggest(uuid, text, text, jsonb, jsonb) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -99,3 +125,6 @@ create policy "Cada uno su colección" on public.collections
   for all to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Para que la API vea al momento las tablas y funciones nuevas.
+notify pgrst, 'reload schema';
