@@ -4,6 +4,7 @@ import * as AI from "./ai.js";
 import { initGuided, showGuided, editInGuided, newDeck } from "./guided.js";
 import * as Decks from "./decks.js";
 import * as Cloud from "./cloud.js";
+import { initShared, showShared } from "./shared.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
@@ -63,7 +64,7 @@ function openZoom(c) {
       <div class="oracle">${esc(c.text)}</div>
       <div class="kv"><div><span>EDHREC</span><b>${c.rank >= 99999 ? "–" : "#" + c.rank}</b></div><div><span>Precio</span><b>${c.price ? c.price.toFixed(2) + " $" : "–"}</b></div><div><span>Edición</span><b style="font-family:var(--f-body)">${esc(c.set)}</b></div></div>
       <p class="small" style="margin:0">${c.legal ? '<span class="ok">Legal en Commander</span>' : isPreview(c) ? `<span class="lo">Preview: sale el ${esc(c.released)}</span>` : '<span class="no">No legal en Commander</span>'}${c.gc ? ' · <span class="tag gc">Game Changer</span>' : ""}</p>
-      <div class="row">${$("#view-guiado").hidden && deck.cmds.length && !deck.cards.has(A.key(c)) && !deck.cmds.some(x => x.name === c.name) ? `<button class="btn primary sm" data-addz="${esc(c.name)}">Añadir al mazo</button>` : ""}<a class="btn sm" href="${esc(c.uri)}" target="_blank" rel="noopener" style="text-decoration:none">Ver en Scryfall</a><button class="btn sm" data-close>Cerrar</button></div>
+      <div class="row">${$("#view-guiado").hidden && $("#view-compartido").hidden && deck.cmds.length && !deck.cards.has(A.key(c)) && !deck.cmds.some(x => x.name === c.name) ? `<button class="btn primary sm" data-addz="${esc(c.name)}">Añadir al mazo</button>` : ""}<a class="btn sm" href="${esc(c.uri)}" target="_blank" rel="noopener" style="text-decoration:none">Ver en Scryfall</a><button class="btn sm" data-close>Cerrar</button></div>
     </div></div>`;
   zoom.hidden = false;
   zoom.querySelector("[data-close]").focus();
@@ -318,15 +319,17 @@ function renderDecks() {
   const el = $("#decksList"), all = Decks.list(), f = SF.norm($("#decksFilter").value || "");
   if (!all.length) { el.innerHTML = '<div class="panel"><p class="muted" style="margin:0">Aún no tienes mazos guardados. Analiza o construye uno y pulsa «Guardar en Mis mazos».</p></div>'; return; }
   const list = f ? all.filter(d => SF.norm(d.name + " " + d.cmds.join(" ")).includes(f)) : all;
+  const sugg = Cloud.state().suggestions || [];
   el.innerHTML = list.map(d => {
-    const s = d.stats || {};
+    const s = d.stats || {}, nNew = sugg.filter(x => x.deck_id === d.id && x.status === "new").length, nAll = sugg.filter(x => x.deck_id === d.id).length;
     return `<article class="deckcard" data-deck="${esc(d.id)}">
       <div class="dhead"${s.art ? ` style="background-image:url('${esc(s.art)}')"` : ""}><div><div class="dname">${esc(d.name)}</div><div class="small muted">${esc(d.cmds.join(" + ")) || "Sin comandante"}</div></div></div>
       <div class="dbody">
         <div class="dstats">${pipsHTML(s.ci || "")}<span class="mono${s.total === 100 ? "" : " lo"}">${s.total ?? "?"}/100</span><span class="mono">${s.price ?? "?"} $</span><span class="mono">B${s.bracket ?? "?"}</span>${s.grade ? `<span class="grade">${esc(s.grade)}</span>` : ""}</div>
         <div class="small muted">Actualizado ${ago(d.updated)}</div>
-        <div class="row"><button class="btn sm primary" data-dact="open">Abrir</button><button class="btn sm" data-dact="guided">Editar paso a paso</button><button class="btn sm" data-dact="copy">Copiar lista</button></div>
-        <div class="row dminor"><button class="btn sm" data-dact="rename">Renombrar</button><button class="btn sm" data-dact="dup">Duplicar</button><button class="btn sm danger" data-dact="del">Borrar</button></div>
+        ${nAll ? `<button class="btn sm dsugg${nNew ? " new" : ""}" data-dact="sugg">${nNew ? `${nNew} ${nNew === 1 ? "sugerencia nueva" : "sugerencias nuevas"}` : `${nAll} ${nAll === 1 ? "sugerencia" : "sugerencias"}`}</button>` : ""}
+        <div class="row"><button class="btn sm primary" data-dact="open">Abrir</button><button class="btn sm" data-dact="guided">Editar paso a paso</button><button class="btn sm" data-dact="share">Compartir</button></div>
+        <div class="row dminor"><button class="btn sm" data-dact="copy">Copiar lista</button><button class="btn sm" data-dact="rename">Renombrar</button><button class="btn sm" data-dact="dup">Duplicar</button><button class="btn sm danger" data-dact="del">Borrar</button></div>
       </div></article>`;
   }).join("") || '<p class="muted">Ningún mazo coincide con la búsqueda.</p>';
 }
@@ -342,6 +345,10 @@ $("#decksList").addEventListener("click", async e => {
     if (act === "guided") { if (deck.cmds.length) editInGuided(deck.cmds, deck.cards, id); else { location.hash = "analizar"; toast("No se encontró el comandante de este mazo"); } }
   } else if (act === "copy") {
     navigator.clipboard.writeText(d.text).then(() => toast("Lista copiada"), () => toast("No se pudo copiar"));
+  } else if (act === "share") {
+    shareDeck(d);
+  } else if (act === "sugg") {
+    openSuggestions(d);
   } else if (act === "rename") {
     const name = await askName("Renombrar mazo", d.name);
     if (name) { Decks.rename(id, name); renderDecks(); renderSavedNote(); }
@@ -352,6 +359,73 @@ $("#decksList").addEventListener("click", async e => {
     Decks.remove(id); if (deckId === id) setDeckId(null); renderDecks(); toast("Mazo borrado");
   }
 });
+/* ---------- compartir y sugerencias de amigos ---------- */
+async function shareDeck(d) {
+  const st = $("#decksStatus");
+  if (!Cloud.state().configured) { st.innerHTML = '<span class="lo">Para compartir hace falta la nube (mira el README).</span>'; return; }
+  if (!Cloud.state().user) { st.innerHTML = '<span class="lo">Para compartir un mazo, entra primero con tu cuenta en la caja de arriba.</span>'; $("#cloudBox").scrollIntoView({ block: "nearest" }); return; }
+  st.innerHTML = '<span class="spin"></span><span>Preparando el enlace…</span>';
+  try {
+    const url = await Cloud.shareLink(d.id);
+    st.innerHTML = `<div class="sharebox"><div><b>Enlace para compartir «${esc(d.name)}»</b><p class="muted small">Quien lo abra verá el mazo y podrá sugerirte cartas para quitar y añadir, sin necesidad de cuenta.</p></div>
+      <div class="row"><input type="text" readonly value="${esc(url)}" id="shareUrl" aria-label="Enlace para compartir"><button class="btn sm primary" data-share="copy">Copiar</button><button class="btn sm" data-share="off" data-id="${esc(d.id)}">Dejar de compartir</button></div></div>`;
+    navigator.clipboard.writeText(url).then(() => toast("Enlace copiado"), () => {});
+  } catch (e) { st.innerHTML = `<span class="no">No se pudo crear el enlace: ${esc(e.message || e)}</span>`; }
+}
+$("#decksStatus").addEventListener("click", async e => {
+  const b = e.target.closest("[data-share]"); if (!b) return;
+  if (b.dataset.share === "copy") { const u = $("#shareUrl"); u.select(); navigator.clipboard.writeText(u.value).then(() => toast("Enlace copiado"), () => toast("Selecciónalo y cópialo")); }
+  else if (b.dataset.share === "off" && confirm("¿Dejar de compartir este mazo? El enlace dejará de funcionar (las sugerencias que ya tengas se quedan).")) {
+    try { await Cloud.unshare(b.dataset.id); $("#decksStatus").innerHTML = '<span class="ok">Ya no se comparte. Si lo vuelves a compartir, tendrá un enlace nuevo.</span>'; }
+    catch (err) { toast("No se pudo: " + (err.message || err)); }
+  }
+});
+
+const suggDlg = $("#suggDlg");
+function openSuggestions(d) {
+  const list = (Cloud.state().suggestions || []).filter(x => x.deck_id === d.id);
+  const when = t => new Date(t).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+  const items = (arr, kind, sid) => (Array.isArray(arr) ? arr : []).map((x, i) => `<label class="sitem"><input type="checkbox" checked data-sid="${esc(sid)}" data-kind="${kind}" data-i="${i}"><span><b>${esc(x.name)}</b>${x.why ? `<span class="muted small"> — ${esc(x.why)}</span>` : ""}</span></label>`).join("");
+  $("#suggBody").innerHTML = `<h3 style="margin:0">Sugerencias para «${esc(d.name)}»</h3>` + (list.map(s => `
+    <div class="sbox" data-sbox="${esc(s.id)}">
+      <div class="row between"><div><b>${esc(s.author || "Alguien")}</b> <span class="muted small">· ${when(s.created)}${s.status === "applied" ? " · aplicada" : ""}</span></div></div>
+      ${s.message ? `<p class="smsg">${esc(s.message)}</p>` : ""}
+      ${(s.cuts || []).length ? `<div class="eyebrow no">Quitaría</div>${items(s.cuts, "cuts", s.id)}` : ""}
+      ${(s.adds || []).length ? `<div class="eyebrow ok">Añadiría</div>${items(s.adds, "adds", s.id)}` : ""}
+      <div class="row"><button class="btn sm primary" data-sapply="${esc(s.id)}">Aplicar las marcadas</button><button class="btn sm" data-sdismiss="${esc(s.id)}">Descartar</button></div>
+    </div>`).join("") || '<p class="muted">No hay sugerencias para este mazo.</p>') + '<div class="row" style="justify-content:flex-end"><button class="btn" data-sclose>Cerrar</button></div>';
+  suggDlg.dataset.deck = d.id;
+  suggDlg.showModal();
+}
+suggDlg.addEventListener("click", async e => {
+  if (e.target === suggDlg || e.target.closest("[data-sclose]")) { suggDlg.close(); return; }
+  const dis = e.target.closest("[data-sdismiss]");
+  if (dis) {
+    try { await Cloud.setSuggestionStatus(dis.dataset.sdismiss, "dismissed"); dis.closest(".sbox").remove(); renderDecks(); }
+    catch (err) { toast("No se pudo: " + (err.message || err)); }
+    return;
+  }
+  const ap = e.target.closest("[data-sapply]"); if (!ap) return;
+  const sid = ap.dataset.sapply, s = (Cloud.state().suggestions || []).find(x => x.id === sid), d = Decks.get(suggDlg.dataset.deck);
+  if (!s || !d) return;
+  const pick = kind => [...suggDlg.querySelectorAll(`input[data-sid="${CSS.escape(sid)}"][data-kind="${kind}"]:checked`)].map(i => (s[kind] || [])[+i.dataset.i]).filter(Boolean).map(x => String(x.name));
+  const cuts = pick("cuts"), adds = pick("adds");
+  if (!cuts.length && !adds.length) { toast("Marca alguna carta"); return; }
+  ap.disabled = true;
+  // Abre el mazo guardado en Analizar con los cambios aplicados; el usuario revisa y pulsa «Guardar cambios».
+  $("#deckText").value = d.text; $("#cmd1").value = ""; $("#cmd2").value = "";
+  await loadFromText(d.text); setDeckId(d.id);
+  await SF.collection([...cuts, ...adds]).catch(() => {});
+  let done = 0;
+  cuts.forEach(n => { const c = SF.cached(n); if (c && deck.cards.has(A.key(c))) { deck.cards.delete(A.key(c)); done++; } });
+  adds.forEach(n => { const c = SF.cached(n); if (c && !deck.cards.has(A.key(c))) { addToDeck(c); done++; } });
+  syncText(); render();
+  $("#aiOut").innerHTML = `<p style="margin:0">Aplicadas ${done} sugerencias de <b>${esc(s.author || "tu amigo")}</b> (${cuts.length} quitadas, ${adds.length} añadidas). Revisa el mazo y pulsa <b>«Guardar cambios»</b> para guardarlo.</p>`;
+  Cloud.setSuggestionStatus(sid, "applied").catch(() => {});
+  suggDlg.close();
+  location.hash = "analizar";
+});
+
 $("#decksExport").onclick = () => {
   if (!Decks.list().length) { toast("No hay mazos que exportar"); return; }
   const a = document.createElement("a");
@@ -759,7 +833,16 @@ function askName(title, value) {
 let cmdsLoaded = false;
 function route() {
   const views = ["analizar", "construir", "guiado", "mazos", "mano"];
-  const v = views.includes(location.hash.slice(1)) ? location.hash.slice(1) : "analizar";
+  const h = location.hash.slice(1);
+  // Enlace de un mazo compartido: #compartido/<id>
+  const shared = /^compartido\/([0-9a-f-]{36})$/i.exec(h);
+  $("#view-compartido").hidden = !shared;
+  if (shared) {
+    views.forEach(x => { $("#view-" + x).hidden = true; });
+    document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", "false"));
+    showShared(shared[1]); return;
+  }
+  const v = views.includes(h) ? h : "analizar";
   views.forEach(x => { $("#view-" + x).hidden = x !== v; });
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
   if (v === "mano" && !hand.length && deck.cards.size) newGame(false); else if (v === "mano") renderHand();
@@ -768,6 +851,8 @@ function route() {
   if (v === "mazos") { renderDecks(); renderCloud(); }
 }
 window.addEventListener("hashchange", route);
+
+initShared({ esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck });
 
 initGuided({
   esc, manaHTML, pipsHTML, toast, attachAC, thinking, cmdQuery, aiReady,

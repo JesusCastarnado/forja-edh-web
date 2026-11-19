@@ -95,6 +95,7 @@ Tus mazos guardados, cada uno con el arte del comandante, sus colores, cartas, p
 - **Buscar** por nombre o comandante.
 - **Exportar copia**: descarga todos tus mazos en un .json.
 - **Nube**: entra con GitHub o con tu email y se sincronizan entre dispositivos (ver [Mis mazos y la nube](#mis-mazos-y-la-nube)).
+- **Compartir y recibir sugerencias**: «Compartir» te da un enlace; tus amigos marcan qué quitarían y qué añadirían, y tú decides qué aplicar (ver [Compartir un mazo](#compartir-un-mazo-y-recibir-sugerencias)).
 
 ### Probar mano
 
@@ -210,6 +211,18 @@ Cada navegador recuerda la sesión, así que solo hay que entrar una vez por dis
 - Cada usuario solo puede ver y modificar sus propios mazos. Lo garantizan las reglas de la base de datos (*Row Level Security*) de `supabase/schema.sql`, no la web.
 - En el código solo está la **clave publicable** de Supabase (`js/config.js`), que está pensada para ser pública. La clave secreta de Supabase y el secreto de GitHub **nunca** van en el repositorio.
 
+### Compartir un mazo y recibir sugerencias
+
+1. En **Mis mazos**, con la sesión iniciada, pulsa **Compartir** en un mazo. Se copia un enlace del tipo `https://forja-edh-web.vercel.app/#compartido/…`.
+2. Tu amigo lo abre (no necesita cuenta) y ve el mazo con las imágenes:
+   - pulsa las cartas que **quitaría** (se marcan en rojo),
+   - busca las que **añadiría** (solo salen cartas legales en tus colores),
+   - puede escribir el porqué de cada una, su nombre y un mensaje, y pulsa **Enviar sugerencias**.
+3. En **Mis mazos**, el mazo muestra **«N sugerencias nuevas»**. Ábrelas, desmarca lo que no quieras y pulsa **Aplicar las marcadas**: el mazo se abre en Analizar con los cambios hechos para que lo revises y pulses **Guardar cambios**. **Descartar** la quita de la lista.
+4. **Dejar de compartir** (en el mismo aviso del enlace) hace que el enlace deje de funcionar. Si vuelves a compartir, el enlace es nuevo.
+
+El enlace solo deja ver el nombre del mazo, los comandantes y la lista; nada de tu cuenta. Las sugerencias solo las ves tú.
+
 ### Copia de seguridad
 
 Aunque uses la nube, «Exportar copia» descarga todos tus mazos en un `.json` que puedes volver a cargar con «Importar archivo».
@@ -229,9 +242,10 @@ js/analysis.js        lectura de listas, estadísticas, bracket y generador auto
 js/scryfall.js        acceso a la API de Scryfall (con pausa entre peticiones y caché)
 js/ai.js              cliente de /api/claude (respuesta en streaming)
 js/decks.js           «Mis mazos» en el navegador
-js/cloud.js           sincronización de «Mis mazos» con Supabase e inicio de sesión
+js/cloud.js           sincronización de «Mis mazos» con Supabase, inicio de sesión, compartir y sugerencias
+js/shared.js          vista del mazo compartido (#compartido/…) para sugerir cambios
 js/config.js          URL y clave publicable de Supabase (vacías = sin nube)
-supabase/schema.sql   tabla de mazos y reglas de seguridad
+supabase/schema.sql   tablas (mazos y sugerencias), reglas de seguridad y funciones para compartir
 api/claude.js         función de Vercel que llama a Claude con el SDK oficial
 dev/serve.ps1         servidor local: sirve la web y hace de /api/claude con Claude Code
 vercel.json           configuración de la función (hasta 300 s)

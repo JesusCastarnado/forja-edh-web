@@ -7,11 +7,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/+esm"; // admite las claves «publishable»
 const COLS = "id,name,cmds,text,stats,created,updated,deleted";
 
-let client = null, user = null, syncing = null, timer = null, lastSync = 0, lastError = "";
+let client = null, user = null, syncing = null, timer = null, lastSync = 0, lastError = "", suggestions = [];
+let readyResolve; const readyP = new Promise(r => { readyResolve = r; });
 const listeners = new Set();
 
 export const configured = () => Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-export const state = () => ({ configured: configured(), ready: !!client, user, lastSync, syncing: !!syncing, error: lastError });
+export const state = () => ({ configured: configured(), ready: !!client, user, lastSync, syncing: !!syncing, error: lastError, suggestions });
+// Espera a que la nube esté lista (o a que se sepa que no hay nube). Devuelve true si hay cliente.
+export const whenReady = () => configured() ? readyP.then(() => !!client) : Promise.resolve(false);
 export const onState = cb => listeners.add(cb);
 const emit = () => listeners.forEach(cb => { try { cb(state()); } catch {} });
 
@@ -37,7 +40,7 @@ export async function init() {
     if (user) sync();
   } catch (e) {
     lastError = "No se pudo conectar con la nube: " + (e.message || e); emit();
-  }
+  } finally { readyResolve(); }
 }
 
 // Quita de la dirección los restos del enlace de inicio de sesión.
@@ -88,11 +91,61 @@ async function run() {
       upsert: async rows => { if (!rows.length) return; const { error } = await client.from("decks").upsert(rows.map(r => ({ ...r, user_id: uid }))); if (error) throw error; },
     });
     lastSync = Date.now(); lastError = "";
+    await loadSuggestions();
     return changed;
   } catch (e) {
     lastError = "Error al sincronizar: " + (e.message || e);
     return false;
   }
+}
+
+/* ---------- compartir y sugerencias ---------- */
+export const shareURL = shareId => `${location.origin}${location.pathname}#compartido/${shareId}`;
+
+// Devuelve el enlace para compartir un mazo (lo crea si no existía). El mazo se sube antes a la nube.
+export async function shareLink(deckId) {
+  if (!client || !user) throw new Error("Entra con tu cuenta para compartir mazos");
+  await sync(); if (syncing) await syncing;
+  const { data, error } = await client.from("decks").select("share_id").eq("id", deckId).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("El mazo aún no está en la nube; prueba otra vez en unos segundos");
+  let shareId = data.share_id;
+  if (!shareId) {
+    shareId = crypto.randomUUID();
+    const r = await client.from("decks").update({ share_id: shareId }).eq("id", deckId);
+    if (r.error) throw r.error;
+  }
+  return shareURL(shareId);
+}
+export async function unshare(deckId) {
+  if (!client || !user) return;
+  const { error } = await client.from("decks").update({ share_id: null }).eq("id", deckId);
+  if (error) throw error;
+}
+// Mazo compartido (lo puede leer cualquiera con el enlace, sin cuenta). null si no existe.
+export async function sharedDeck(shareId) {
+  if (!(await whenReady())) throw new Error("La nube no está configurada en esta web");
+  const { data, error } = await client.rpc("shared_deck", { p_share: shareId });
+  if (error) throw error;
+  return Array.isArray(data) && data[0] ? data[0] : null;
+}
+export async function sendSuggestion(shareId, { author, message, cuts, adds }) {
+  if (!(await whenReady())) throw new Error("La nube no está configurada en esta web");
+  const { error } = await client.rpc("suggest", { p_share: shareId, p_author: author || "", p_message: message || "", p_cuts: cuts, p_adds: adds });
+  if (error) throw error;
+}
+// Sugerencias recibidas en mis mazos (las que no he descartado).
+async function loadSuggestions() {
+  if (!client || !user) { suggestions = []; return; }
+  const { data, error } = await client.from("suggestions").select("id,deck_id,author,message,cuts,adds,status,created").neq("status", "dismissed").order("created", { ascending: false });
+  if (!error) suggestions = data || [];
+}
+export async function setSuggestionStatus(id, status) {
+  if (!client || !user) return;
+  const { error } = await client.from("suggestions").update({ status }).eq("id", id);
+  if (error) throw error;
+  suggestions = suggestions.map(s => s.id === id ? { ...s, status } : s).filter(s => s.status !== "dismissed");
+  emit();
 }
 
 const toRow = d => ({ id: d.id, name: d.name, cmds: d.cmds || [], text: d.text, stats: d.stats || {}, created: d.created || d.updated || Date.now(), updated: d.updated || Date.now(), deleted: false });

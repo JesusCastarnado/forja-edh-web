@@ -318,4 +318,35 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 .dminor .btn:hover{color:var(--fg);border-color:var(--line)}
 .dminor .btn.danger:hover{color:var(--bad);border-color:var(--bad)}
 
+/* ---------- Mazo compartido y sugerencias ---------- */
+.sshead{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;margin-bottom:16px}
+.sshead .gstats{margin-left:auto}
+.scols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,330px);gap:16px;align-items:start}
+@media (max-width:860px){.scols{grid-template-columns:1fr}}
+.sgrid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.sside{position:sticky;top:calc(var(--hdr,64px) + 12px);display:grid;gap:8px;max-height:calc(100vh - var(--hdr,64px) - 24px);overflow:auto}
+@media (max-width:860px){.sside{position:static;max-height:none}}
+.sside h3{margin:0}
+.sside textarea{min-height:70px;font-family:var(--f-body)}
+.srow{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)}
+.srow img{width:36px;border-radius:3px;display:block}
+.srow input{padding:3px 8px;font-size:13px;margin-top:3px}
+.srow .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:17px;padding:0 4px}
+.srow .x:hover{color:var(--bad)}
+.gcard.cut .gpickbtn{outline-color:var(--bad)}
+.gcard.cut .gcheck{background:var(--bad);color:#fff}
+.gcard.cut img{opacity:.55}
+.gpickbtn .qb{position:absolute;left:6px;top:6px;background:var(--accent);color:var(--accent-ink);font-family:var(--f-mono);font-size:12px;border-radius:999px;padding:0 7px}
+.sharebox{display:grid;gap:8px;width:100%;border:1px solid var(--accent);border-radius:10px;padding:12px 14px;background:var(--surface)}
+.sharebox p{margin:2px 0 0}
+.sharebox input{flex:1 1 260px;font-family:var(--f-mono);font-size:13px}
+.dstatus .sharebox{justify-self:stretch}
+.dsugg{justify-self:start}
+.dsugg.new{border-color:var(--accent);color:var(--accent);font-weight:600}
+dialog.sdlg{width:min(620px,94vw);max-height:88vh;overflow:auto}
+.sbox{border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:6px;background:var(--bg)}
+.smsg{margin:0;white-space:pre-line;border-left:3px solid var(--accent);padding-left:10px}
+.sitem{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start;font-size:14px;cursor:pointer}
+.sitem input{margin-top:4px;accent-color:var(--accent)}
+
 footer{margin-top:40px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:12px}
