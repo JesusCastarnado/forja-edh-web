@@ -17,6 +17,7 @@
     <nav class="tabs" aria-label="Secciones">
       <a href="#analizar" data-view="analizar">Analizar</a>
       <a href="#construir" data-view="construir">Construir</a>
+      <a href="#guiado" data-view="guiado">Paso a paso</a>
       <a href="#mano" data-view="mano">Probar mano</a>
     </nav>
     <button class="btn sm" id="btnPass" hidden>Clave IA</button>
@@ -130,6 +131,60 @@
     <h3>Comandantes nuevos</h3>
     <p class="muted small" style="margin:0 0 10px">Aparecidos en los últimos 4 meses, previews incluidas. Pulsa uno para construir con él.</p>
     <div class="grid-cards" id="newCmds"></div>
+  </div>
+</section>
+
+<!-- ===================== PASO A PASO ===================== -->
+<section id="view-guiado" hidden>
+  <div id="gPick">
+    <div class="hero">
+      <h2>Elige tu comandante.</h2>
+      <p>Busca una criatura legendaria o empieza por una de las más jugadas. Después montamos el mazo paso a paso: aceleración, robo, interacción, el plan del comandante y las tierras.</p>
+    </div>
+    <div class="ac gsearch"><input type="text" id="gCmdSearch" autocomplete="off" placeholder="Ej.: Lathril, Blade of the Elves" aria-label="Buscar comandante"></div>
+    <div class="gchoose">
+      <nav class="panel garch" id="gArch" aria-label="Estilos de juego"></nav>
+      <div class="stack">
+        <div class="row between">
+          <h3 class="gtitle" id="gCmdTitle">O empieza por uno de los más jugados</h3>
+          <div class="row">
+            <div class="gcolors" id="gColors" role="group" aria-label="Colores"></div>
+            <div class="seg" role="group" aria-label="Cómo filtrar los colores">
+              <button class="btn sm" data-gexact="1" aria-pressed="true">Exactos</button>
+              <button class="btn sm" data-gexact="0" aria-pressed="false">Que contengan</button>
+            </div>
+          </div>
+        </div>
+        <div class="ggrid" id="gCmdGrid"></div>
+        <div class="row gmore"><button class="btn" id="gCmdMore" hidden>Ver más</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="gBuild" hidden>
+    <div class="panel gbar" id="gBar"></div>
+    <div class="gcols">
+      <aside class="stack">
+        <div class="panel">
+          <ol class="gsteps" id="gSteps"></ol>
+          <div class="seg gmode" role="group" aria-label="Modo">
+            <button class="btn sm" data-gmode="guided" aria-pressed="true">Guiado</button>
+            <button class="btn sm" data-gmode="free" aria-pressed="false">Libre</button>
+          </div>
+        </div>
+        <button class="btn" id="gBasics">Completar con básicas</button>
+        <div class="panel" id="gCmdPanel"></div>
+      </aside>
+      <div class="stack">
+        <div class="panel gstep" id="gStepHead"></div>
+        <div class="ggrid" id="gGrid"></div>
+        <div class="row gmore"><button class="btn" id="gMore" hidden>Ver más</button></div>
+      </div>
+      <aside class="stack gright">
+        <div class="panel"><h3>Tu mazo</h3><div id="gDeck"></div></div>
+        <div class="panel"><h3>Curva de maná</h3><div class="curve" id="gCurve"></div></div>
+      </aside>
+    </div>
   </div>
 </section>
 

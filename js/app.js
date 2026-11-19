@@ -1,6 +1,7 @@
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
+import { initGuided, showGuided } from "./guided.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
@@ -60,7 +61,7 @@ function openZoom(c) {
       <div class="oracle">${esc(c.text)}</div>
       <div class="kv"><div><span>EDHREC</span><b>${c.rank >= 99999 ? "–" : "#" + c.rank}</b></div><div><span>Precio</span><b>${c.price ? c.price.toFixed(2) + " $" : "–"}</b></div><div><span>Edición</span><b style="font-family:var(--f-body)">${esc(c.set)}</b></div></div>
       <p class="small" style="margin:0">${c.legal ? '<span class="ok">Legal en Commander</span>' : isPreview(c) ? `<span class="lo">Preview: sale el ${esc(c.released)}</span>` : '<span class="no">No legal en Commander</span>'}${c.gc ? ' · <span class="tag gc">Game Changer</span>' : ""}</p>
-      <div class="row">${deck.cmds.length && !deck.cards.has(A.key(c)) && !deck.cmds.some(x => x.name === c.name) ? `<button class="btn primary sm" data-addz="${esc(c.name)}">Añadir al mazo</button>` : ""}<a class="btn sm" href="${esc(c.uri)}" target="_blank" rel="noopener" style="text-decoration:none">Ver en Scryfall</a><button class="btn sm" data-close>Cerrar</button></div>
+      <div class="row">${$("#view-guiado").hidden && deck.cmds.length && !deck.cards.has(A.key(c)) && !deck.cmds.some(x => x.name === c.name) ? `<button class="btn primary sm" data-addz="${esc(c.name)}">Añadir al mazo</button>` : ""}<a class="btn sm" href="${esc(c.uri)}" target="_blank" rel="noopener" style="text-decoration:none">Ver en Scryfall</a><button class="btn sm" data-close>Cerrar</button></div>
     </div></div>`;
   zoom.hidden = false;
   zoom.querySelector("[data-close]").focus();
@@ -552,14 +553,20 @@ $("#btnPass").onclick = () => askPass();
 /* ---------- navegación ---------- */
 let cmdsLoaded = false;
 function route() {
-  const views = ["analizar", "construir", "mano"];
+  const views = ["analizar", "construir", "guiado", "mano"];
   const v = views.includes(location.hash.slice(1)) ? location.hash.slice(1) : "analizar";
   views.forEach(x => { $("#view-" + x).hidden = x !== v; });
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
   if (v === "mano" && !hand.length && deck.cards.size) newGame(false); else if (v === "mano") renderHand();
   if (v === "construir" && !cmdsLoaded) { cmdsLoaded = true; renderNewCommanders(); }
+  if (v === "guiado") showGuided();
 }
 window.addEventListener("hashchange", route);
+
+initGuided({
+  esc, manaHTML, pipsHTML, toast, attachAC, thinking, cmdQuery,
+  onAnalyze: (cmds, cards) => loadBuilt(cmds, cards, '<p class="muted" style="margin:0">Mazo montado paso a paso. Usa «Optimizar con IA» para afinar la sinergia.</p>'),
+});
 
 /* ---------- arranque ---------- */
 (async function boot() {
