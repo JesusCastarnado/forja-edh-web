@@ -2,6 +2,7 @@
 // (aceleración, robo, interacción…) con sugerencias de Scryfall dentro de tu identidad de color.
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
+import * as AI from "./ai.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
@@ -259,6 +260,66 @@ function renderCmdPanel() {
   } });
 }
 
+/* ---------- ¿encaja esta carta? ---------- */
+// Valora con la IA si una carta que te gusta encaja en el mazo, qué quitar para meterla y alternativas.
+const VERD = { si: ["Buena idea", "ok"], depende: ["Depende", "lo"], no: ["Mejor no", "no"] };
+async function fitCard() {
+  const out = $("#gFitOut"), name = $("#gFitCard").value.trim(), e = H.esc;
+  if (!name) { out.innerHTML = '<p class="muted small">Escribe el nombre de una carta (en inglés) y pulsa «¿Encaja?».</p>'; return; }
+  out.innerHTML = H.thinking("Buscando la carta en Scryfall…");
+  await SF.collection([name], { fuzzyLimit: 1 }).catch(() => {});
+  const c = SF.cached(name);
+  if (!c) { out.innerHTML = `<p class="no">No encuentro «${e(name)}» en Scryfall. Escríbela en inglés.</p>`; return; }
+  const ci = A.ciUnion(st.cmds), inDeck = st.cards.has(A.key(c));
+  // Lo que se puede saber sin IA
+  if (st.cmds.some(x => x.name === c.name)) { out.innerHTML = `<p class="muted">${e(c.name)} es tu comandante.</p>`; return; }
+  if (!A.subsetCI(c.ci, ci)) { out.innerHTML = `<p class="no"><b>${e(c.name)}</b> no puede ir en este mazo: tiene colores (${H.pipsHTML(c.ci)}) fuera de la identidad de tu comandante (${H.pipsHTML(ci)}).</p>`; return; }
+  if (!c.legal) { out.innerHTML = `<p class="no"><b>${e(c.name)}</b> ${c.released > new Date().toISOString().slice(0, 10) ? "aún no ha salido (es una preview)" : "está prohibida o no es legal en Commander"}.</p>`; return; }
+  if (!(await H.aiReady(out))) return;
+
+  const btn = $("#gFitBtn"); btn.disabled = true;
+  out.innerHTML = H.thinking(`Claude está valorando ${c.name} para tu mazo…`);
+  const n = counts(), t = targets(), s = A.analyze(deckObj());
+  const cmdTxt = st.cmds.map(x => `${x.name} (${x.type}${x.sub ? " — " + x.sub : ""}): ${x.text}`).join("\n");
+  const list = entries().map(x => `${x.q} ${x.c.name}`).join("\n");
+  const cats = STEPS.map(x => `${x.label} ${n[x.k]}/${t[x.k]}`).join(", ");
+  const prompt = `Un jugador quiere saber si esta carta encaja en su mazo de Commander.
+Carta propuesta: ${c.name} (${c.cost || "sin coste"}, ${c.type}${c.sub ? " — " + c.sub : ""}): ${c.text}
+${inDeck ? "La carta YA está en el mazo: valora si merece la pena mantenerla." : ""}
+Comandante(s):
+${cmdTxt}
+Identidad de color: ${ci || "incolora"}. ${total() + st.cmds.length} de 100 cartas. Bracket estimado B${s.bracket}, ${s.gc.length} Game Changers, CMC medio ${s.avgCmc.toFixed(2)}.
+Categorías (actual/objetivo): ${cats}.
+Lista actual:
+${list || "(vacía)"}
+Responde SOLO con JSON, con esta forma exacta:
+{"veredicto":"si|depende|no","resumen":"1-2 frases claras con la conclusión","a_favor":["2-4 razones cortas"],"en_contra":["0-4 razones cortas"],"cortar":[{"carta":"Nombre exacto en inglés","motivo":"breve"}],"alternativas":[{"carta":"Nombre exacto en inglés","motivo":"breve: por qué es mejor o qué aporta"}]}
+Reglas: valora la sinergia con el comandante, la curva, el nivel de poder (bracket) y qué hueco cubre. "cortar": ${inDeck ? "déjalo vacío" : `1-3 cartas de la lista que sacarías para meterla${total() + st.cmds.length < 100 ? " (puede ir vacío si aún hay sitio en el mazo)" : ""}`}. "alternativas": 0-3 cartas que no estén en la lista, legales en Commander y dentro de la identidad ${ci || "incolora"}, solo si el veredicto es "depende" o "no".`;
+  try {
+    const r = await AI.askJSON(prompt, { effort: "low" });
+    const cutsRaw = Array.isArray(r.cortar) ? r.cortar : [], altsRaw = Array.isArray(r.alternativas) ? r.alternativas : [];
+    await SF.collection([...cutsRaw, ...altsRaw].map(x => String(x.carta || "")), { fuzzyLimit: 6 }).catch(() => {});
+    const cuts = cutsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) })).filter(x => x.c && st.cards.has(A.key(x.c)));
+    const seen = new Set([A.key(c)]);
+    const alts = altsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) }))
+      .filter(x => x.c && x.c.legal && A.subsetCI(x.c.ci, ci) && !st.cards.has(A.key(x.c)) && !seen.has(A.key(x.c)) && seen.add(A.key(x.c)));
+    const [vtxt, vcls] = VERD[r.veredicto] || VERD.depende;
+    const li = arr => (Array.isArray(arr) ? arr : []).map(x => `<li>${e(x)}</li>`).join("");
+    const row = (x, kind) => `<div class="fitline">${x.c.small ? `<img src="${e(x.c.small)}" alt="" loading="lazy">` : "<span></span>"}<div style="min-width:0"><button class="cn" data-name="${e(x.c.name)}">${e(x.c.name)}</button><div class="muted small">${e(x.motivo || "")}</div></div>
+      <button class="btn sm" data-fit${kind}="${e(x.c.name)}">${kind === "cut" ? "Quitar" : "Añadir"}</button></div>`;
+    out.innerHTML = `<div class="fitres">
+      <div class="fithead">${c.small ? `<img src="${e(c.small)}" alt="" loading="lazy">` : ""}<div><span class="verdict ${vcls}">${vtxt}</span>
+        <div class="fitname"><button class="cn" data-name="${e(c.name)}">${e(c.name)}</button></div><p>${e(r.resumen || "")}</p>
+        ${inDeck ? '<p class="muted small">Ya está en tu mazo.</p>' : `<button class="btn sm primary" data-fitadd="${e(c.name)}">Añadir ${e(c.name)}</button>`}</div></div>
+      <div class="fitcols">${li(r.a_favor) ? `<div><div class="eyebrow ok">A favor</div><ul>${li(r.a_favor)}</ul></div>` : ""}${li(r.en_contra) ? `<div><div class="eyebrow no">En contra</div><ul>${li(r.en_contra)}</ul></div>` : ""}</div>
+      ${cuts.length ? `<div><div class="eyebrow">Para meterla, quitaría</div>${cuts.map(x => row(x, "cut")).join("")}</div>` : ""}
+      ${alts.length ? `<div><div class="eyebrow">Alternativas</div>${alts.map(x => row(x, "add")).join("")}</div>` : ""}
+    </div>`;
+  } catch (err) {
+    out.innerHTML = `<p class="no">${e(AI.errMsg(err))}</p>`;
+  } finally { btn.disabled = false; }
+}
+
 /* ---------- acciones ---------- */
 function afterChange() { st.dirty = true; renderAll(); if (st.mode === "guided") renderHead(); save(); }
 function toggle(c) {
@@ -365,6 +426,17 @@ export function initGuided(helpers) {
     afterChange(); renderGrid();
   });
   $("#gBasics").onclick = fillBasics;
+  H.attachAC($("#gFitCard"), { query: q => `${q} game:paper` });
+  $("#gFitBtn").onclick = fitCard;
+  $("#gFitCard").addEventListener("keydown", e => { if (e.key === "Enter" && !e.defaultPrevented) setTimeout(fitCard, 0); });
+  $("#gFitOut").addEventListener("click", e => {
+    const b = e.target.closest("[data-fitadd],[data-fitcut]"); if (!b) return;
+    const c = SF.cached(b.dataset.fitadd || b.dataset.fitcut); if (!c) return;
+    const has = st.cards.has(A.key(c));
+    if (b.dataset.fitadd ? !has : has) toggle(c);
+    b.disabled = true; b.textContent = b.dataset.fitadd ? "Añadida" : "Quitada";
+    renderGrid();
+  });
   $("#view-guiado").addEventListener("click", e => { const b = e.target.closest("[data-gact]"); if (b) onAction(b.dataset.gact); });
 }
 

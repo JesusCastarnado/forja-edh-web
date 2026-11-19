@@ -770,7 +770,7 @@ function route() {
 window.addEventListener("hashchange", route);
 
 initGuided({
-  esc, manaHTML, pipsHTML, toast, attachAC, thinking, cmdQuery,
+  esc, manaHTML, pipsHTML, toast, attachAC, thinking, cmdQuery, aiReady,
   onAnalyze: (cmds, cards, id) => loadBuilt(cmds, cards, '<p class="muted" style="margin:0">Mazo montado paso a paso. Usa «Optimizar con IA» para afinar la sinergia.</p>', id),
   saveDeck: saveDeckFlow,
 });

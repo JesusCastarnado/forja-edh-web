@@ -273,6 +273,22 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 .gsh{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:end}
 .gsh h3{margin:2px 0 4px;font-size:22px}
 .gsh p{margin:0;max-width:62ch}
+/* ¿encaja esta carta? */
+.gfit{display:grid;gap:12px}
+.gfit-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+#gFitOut:empty{display:none}
+.fitres{display:grid;gap:14px}
+.fithead{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:start}
+.fithead img{width:96px;border-radius:6px;display:block}
+.fithead p{margin:6px 0}
+.fitname{font-family:var(--f-display);font-size:20px;margin-top:6px}
+.fitname .cn{font-weight:400}
+.verdict{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border:1px solid currentColor;border-radius:999px;padding:2px 10px}
+.fitcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.fitcols:empty{display:none}
+.fitcols ul{margin:4px 0 0;padding-left:18px;display:grid;gap:3px;font-size:14px}
+.fitline{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.fitline img{width:36px;border-radius:3px;display:block}
 .gcmdimg{border-radius:10px;width:100%;display:block;margin-bottom:10px}
 .gdgroup{margin-bottom:12px}
 .gdgroup h4{margin:0 0 4px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;border-bottom:2px solid var(--c);padding-bottom:3px}
