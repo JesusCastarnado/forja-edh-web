@@ -5,6 +5,11 @@ import { initGuided, showGuided, editInGuided, newDeck } from "./guided.js";
 import * as Decks from "./decks.js";
 import * as Cloud from "./cloud.js";
 import { initShared, showShared } from "./shared.js";
+import * as Combos from "./combos.js";
+import { initCompare, showCompare } from "./compare.js";
+import { initGoldfish, showGoldfish } from "./goldfish.js";
+import { initCollection, showCollection, renderColDeck as colDeckHTML, deckMissingCount } from "./colview.js";
+import { money, cardMoney, currency, symbol, setCurrency, currencyName } from "./currency.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
@@ -62,7 +67,7 @@ function openZoom(c) {
       <div class="row between"><h3>${esc(c.name)}</h3>${manaHTML(c.cost)}</div>
       <div class="typeline">${esc(c.type)}${c.sub ? " — " + esc(c.sub) : ""}</div>
       <div class="oracle">${esc(c.text)}</div>
-      <div class="kv"><div><span>EDHREC</span><b>${c.rank >= 99999 ? "–" : "#" + c.rank}</b></div><div><span>Precio</span><b>${c.price ? c.price.toFixed(2) + " $" : "–"}</b></div><div><span>Edición</span><b style="font-family:var(--f-body)">${esc(c.set)}</b></div></div>
+      <div class="kv"><div><span>EDHREC</span><b>${c.rank >= 99999 ? "–" : "#" + c.rank}</b></div><div><span>Precio</span><b>${cardMoney(c)}</b></div><div><span>Edición</span><b style="font-family:var(--f-body)">${esc(c.set)}</b></div></div>
       <p class="small" style="margin:0">${c.legal ? '<span class="ok">Legal en Commander</span>' : isPreview(c) ? `<span class="lo">Preview: sale el ${esc(c.released)}</span>` : '<span class="no">No legal en Commander</span>'}${c.gc ? ' · <span class="tag gc">Game Changer</span>' : ""}</p>
       <div class="row">${$("#view-guiado").hidden && $("#view-compartido").hidden && deck.cmds.length && !deck.cards.has(A.key(c)) && !deck.cmds.some(x => x.name === c.name) ? `<button class="btn primary sm" data-addz="${esc(c.name)}">Añadir al mazo</button>` : ""}<a class="btn sm" href="${esc(c.uri)}" target="_blank" rel="noopener" style="text-decoration:none">Ver en Scryfall</a><button class="btn sm" data-close>Cerrar</button></div>
     </div></div>`;
@@ -115,7 +120,6 @@ const cmdQuery = q => `is:commander game:paper ${q}`;
 
 /* ---------- estado del mazo ---------- */
 let deck = { cmds: [], cards: new Map(), unknown: [], illegal: [] };
-let deckKey = "", library = [], hand = [], mulls = 0;
 let viewMode = store.get("forja-view") === "visual" ? "visual" : "list";
 
 async function loadFromText(text, overrideNames = []) {
@@ -162,17 +166,16 @@ function removeFromDeck(c) { const k = A.key(c), e = deck.cards.get(k); if (!e) 
 
 /* ---------- pintar el análisis ---------- */
 function render() {
-  const s = A.analyze(deck);
   const k = A.deckToText(deck);
-  if (k !== deckKey) { hand = []; library = []; deckKey = k; }
+  const s = A.analyze(deck, { combos: comboKey === k ? comboData : null });
   const cmd0 = deck.cmds[0];
   const cmdNames = deck.cmds.map(c => c.name).join(" + ") || "Sin comandante";
   $("#summary").innerHTML = `
     <div class="cmdcell" ${cmd0 && cmd0.art ? `style="background-image:url('${esc(cmd0.art)}')"` : ""}><div><div class="eyebrow">Comandante</div><div class="cmdname">${deck.cmds.length ? deck.cmds.map(nameBtn).join(" + ") : esc(cmdNames)}</div><div style="margin-top:4px">${deck.cmds.length ? pipsHTML(s.ci) : '<span class="muted small">Elige uno arriba para comprobar la identidad de color.</span>'}</div></div></div>
     <div><div class="eyebrow">Nota</div><div class="big grade">${s.grade}</div><div class="muted small">${s.level} · ${s.score}/100</div></div>
-    <div><div class="eyebrow">Bracket estimado</div><div class="big">B${s.bracket}</div><div class="muted small">${A.BRK[s.bracket]} · ${s.gc.length} Game Changers</div></div>
+    <div><div class="eyebrow">Bracket estimado</div><div class="big">B${s.bracket}</div><div class="muted small">${A.BRK[s.bracket]} · ${s.gc.length} Game Changers${s.twoCard ? ` · ${s.twoCard} ${s.twoCard === 1 ? "combo" : "combos"} de 2 cartas` : ""}</div></div>
     <div><div class="eyebrow">Cartas</div><div class="big mono ${s.total === 100 ? "" : "no"}">${s.total}</div><div class="muted small">${s.total === 100 ? "Mazo completo" : s.total < 100 ? `Faltan ${100 - s.total}` : `Sobran ${s.total - 100}`}</div></div>
-    <div><div class="eyebrow">Precio aprox.</div><div class="big mono">${Math.round(s.price)} $</div><div class="muted small">CMC medio ${s.avgCmc.toFixed(2)}</div></div>`;
+    <div><div class="eyebrow">Precio aprox.</div><div class="big mono">${money(s.price)}</div><div class="muted small">CMC medio ${s.avgCmc.toFixed(2)}</div></div>`;
 
   const groups = {};
   for (const e of deck.cards.values()) (groups[A.groupOf(e.c)] ||= []).push(e);
@@ -222,10 +225,13 @@ function render() {
   if (deck.unknown.length) iss.push(`No encontradas en Scryfall (${deck.unknown.length}): ${deck.unknown.slice(0, 12).map(esc).join(", ")}${deck.unknown.length > 12 ? "…" : ""}. Revisa la ortografía y usa el nombre en inglés.`);
   A.TARGETS.forEach(t => { const v = s[t.k]; if (t.hi) { if (v < t.lo) iss.push(`Pocas tierras (${v}); lo normal son 35–38.`); else if (v > t.hi) iss.push(`Muchas tierras (${v}); podrías cambiar alguna por ramp.`); } else if (v < t.lo) iss.push(`${t.label}: ${v}, por debajo de ${t.t}.`); });
   if (s.avgCmc > 3.6) iss.push(`Curva alta (CMC medio ${s.avgCmc.toFixed(2)}); el mazo puede quedarse lento.`);
+  if (s.twoCard) iss.push(`${s.twoCard === 1 ? "Hay un combo infinito" : `Hay ${s.twoCard} combos infinitos`} de dos cartas: el bracket sube a B${s.bracket} como mínimo (mira «Combos»).`);
   $("#issues").innerHTML = iss.length ? iss.map(x => `<li>${x}</li>`).join("") : '<li class="ok">Sin problemas de legalidad ni de esqueleto.</li>';
   store.set("forja-deck", k);
   renderSavedNote();
   renderNews(s.ci);
+  renderCombos(k);
+  renderColDeck();
 }
 function rowHTML(c, q, bad, isCmd) {
   return `<div class="card${bad ? " bad" : ""}"><span class="q">${q}</span>${nameBtn(c)}<span>${tagsHTML(c)} ${manaHTML(c.cost)}</span>${isCmd ? "<span></span>" : `<button class="x" data-rm="${esc(c.name)}" aria-label="Quitar ${esc(c.name)}">×</button>`}</div>`;
@@ -240,6 +246,57 @@ document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click"
   render();
 }));
 document.querySelectorAll("[data-mode]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.mode === viewMode)));
+
+function renderColDeck() { colDeckHTML(deck); }
+
+/* ---------- combos (Commander Spellbook) ---------- */
+let comboKey = "", comboData = null, comboTimer = null;
+function renderCombos(k) {
+  const el = $("#combos");
+  if (!deck.cards.size) { comboKey = ""; comboData = null; el.innerHTML = '<p class="muted small" style="margin:0">Analiza un mazo para buscar sus combos.</p>'; return; }
+  if (k === comboKey) { if (comboData) paintCombos(comboData); return; }
+  comboKey = k; comboData = null; clearTimeout(comboTimer);
+  el.innerHTML = thinking("Buscando combos en Commander Spellbook…");
+  // Espera un poco: si estás añadiendo o quitando cartas seguidas, solo se consulta al final.
+  comboTimer = setTimeout(async () => {
+    try {
+      const data = await Combos.findCombos(deck);
+      if (comboKey !== k) return;
+      comboData = data; render();
+    } catch (e) {
+      if (comboKey === k) el.innerHTML = `<p class="no small" style="margin:0">No se pudieron buscar los combos: ${esc(e.message || e)}</p><button class="btn sm" id="comboRetry" style="margin-top:8px">Reintentar</button>`;
+    }
+  }, 900);
+}
+const tagHTML = v => { const t = Combos.TAGS[v.tag]; return t ? `<span class="verdict ${t[1]}" title="Etiqueta de Commander Spellbook">${t[0]}</span>` : ""; };
+function comboHTML(v, missing) {
+  const imgs = v.cards.map(c => `<img src="${esc((SF.cached(c.name) || {}).small || c.img)}" alt="" loading="lazy" class="${missing && SF.norm(missing.name) === SF.norm(c.name) ? "miss" : ""}">`).join("");
+  const names = v.cards.map(c => missing && SF.norm(missing.name) === SF.norm(c.name) ? `<b class="lo">${esc(c.name)}</b>` : (SF.cached(c.name) ? nameBtn(SF.cached(c.name)) : esc(c.name))).join(" + ");
+  return `<details class="combo"><summary><span class="cimgs">${imgs}</span><span class="cbody"><span class="cnames">${names}</span>
+      <span class="small muted">${v.produces.slice(0, 3).map(esc).join(" · ")}${v.produces.length > 3 ? " · …" : ""}</span>
+      <span class="row" style="gap:6px">${tagHTML(v)}${Combos.isInfinite(v) && v.cards.length <= 2 ? '<span class="tag gc">2 cartas</span>' : ""}${missing ? `<button class="btn sm" data-cadd="${esc(missing.name)}">Añadir ${esc(missing.name)}</button>` : ""}</span></span></summary>
+    <div class="cdesc">${v.prereq ? `<p class="muted small">${esc(v.prereq)}</p>` : ""}<ol>${v.description.split(/\n+/).filter(Boolean).map(l => `<li>${esc(l)}</li>`).join("")}</ol>
+      <a class="small" href="${esc(Combos.comboURL(v))}" target="_blank" rel="noopener">Ver en Commander Spellbook</a></div></details>`;
+}
+let comboAlmostShown = 8;
+function paintCombos(d) {
+  const el = $("#combos"), two = d.included.filter(v => v.cards.length <= 2 && Combos.isInfinite(v)).length;
+  el.innerHTML = `<p class="small" style="margin:0 0 8px"><b>${d.included.length}</b> ${d.included.length === 1 ? "combo completo" : "combos completos"} · <b>${d.almost.length}</b> a una carta${two ? ` · <span class="lo">${two} infinito${two === 1 ? "" : "s"} de 2 cartas</span>` : ""}</p>`
+    + (d.included.length ? d.included.map(v => comboHTML(v)).join("") : '<p class="muted small" style="margin:0">El mazo no tiene ningún combo conocido completo.</p>')
+    + (d.almost.length ? `<div class="eyebrow" style="margin:14px 0 4px">Te falta una carta</div>${d.almost.slice(0, comboAlmostShown).map(v => comboHTML(v, v.missing[0])).join("")}`
+      + (d.almost.length > comboAlmostShown ? `<button class="btn sm" id="comboMore" style="margin-top:8px">Ver más (${d.almost.length - comboAlmostShown})</button>` : "") : "");
+}
+$("#combos").addEventListener("click", async e => {
+  if (e.target.closest("#comboRetry")) { comboKey = ""; render(); return; }
+  if (e.target.closest("#comboMore")) { comboAlmostShown += 12; if (comboData) paintCombos(comboData); return; }
+  const b = e.target.closest("[data-cadd]"); if (!b) return;
+  e.preventDefault(); b.disabled = true;
+  await SF.collection([b.dataset.cadd]).catch(() => {});
+  const c = SF.cached(b.dataset.cadd), ci = A.ciUnion(deck.cmds);
+  if (!c) { toast("No se encontró la carta en Scryfall"); b.disabled = false; return; }
+  if (!c.legal || (deck.cmds.length && !A.subsetCI(c.ci, ci))) { toast(`${c.name} no es legal o no entra en tus colores`); return; }
+  addToDeck(c); syncText(); render(); toast(c.name + " añadida");
+});
 
 /* ---------- novedades ---------- */
 let newsCI = null;
@@ -308,6 +365,8 @@ async function saveDeckFlow(cmds, cards, id) {
 }
 $("#btnSaveDeck").onclick = async () => { const id = await saveDeckFlow(deck.cmds, deck.cards, deckId); if (id) setDeckId(id); };
 
+// Precio guardado en la galería: los mazos antiguos solo tienen `price` (en dólares).
+const deckPrice = s => { const v = currency() === "eur" ? s.eur : (s.usd ?? s.price); return v == null ? "?" : money(v); };
 const ago = t => {
   const m = (Date.now() - t) / 6e4;
   if (m < 1) return "ahora mismo"; if (m < 60) return `hace ${Math.round(m)} min`;
@@ -321,11 +380,11 @@ function renderDecks() {
   const list = f ? all.filter(d => SF.norm(d.name + " " + d.cmds.join(" ")).includes(f)) : all;
   const sugg = Cloud.state().suggestions || [];
   el.innerHTML = list.map(d => {
-    const s = d.stats || {}, nNew = sugg.filter(x => x.deck_id === d.id && x.status === "new").length, nAll = sugg.filter(x => x.deck_id === d.id).length;
+    const s = d.stats || {}, miss = deckMissingCount(d.text), nNew = sugg.filter(x => x.deck_id === d.id && x.status === "new").length, nAll = sugg.filter(x => x.deck_id === d.id).length;
     return `<article class="deckcard" data-deck="${esc(d.id)}">
       <div class="dhead"${s.art ? ` style="background-image:url('${esc(s.art)}')"` : ""}><div><div class="dname">${esc(d.name)}</div><div class="small muted">${esc(d.cmds.join(" + ")) || "Sin comandante"}</div></div></div>
       <div class="dbody">
-        <div class="dstats">${pipsHTML(s.ci || "")}<span class="mono${s.total === 100 ? "" : " lo"}">${s.total ?? "?"}/100</span><span class="mono">${s.price ?? "?"} $</span><span class="mono">B${s.bracket ?? "?"}</span>${s.grade ? `<span class="grade">${esc(s.grade)}</span>` : ""}</div>
+        <div class="dstats">${pipsHTML(s.ci || "")}<span class="mono${s.total === 100 ? "" : " lo"}">${s.total ?? "?"}/100</span><span class="mono">${deckPrice(s)}</span><span class="mono">B${s.bracket ?? "?"}</span>${s.grade ? `<span class="grade">${esc(s.grade)}</span>` : ""}${miss === null ? "" : `<span class="small ${miss ? "lo" : "ok"}">${miss ? `Te faltan ${miss}` : "Lo tienes todo"}</span>`}</div>
         <div class="small muted">Actualizado ${ago(d.updated)}</div>
         ${nAll ? `<button class="btn sm dsugg${nNew ? " new" : ""}" data-dact="sugg">${nNew ? `${nNew} ${nNew === 1 ? "sugerencia nueva" : "sugerencias nuevas"}` : `${nAll} ${nAll === 1 ? "sugerencia" : "sugerencias"}`}</button>` : ""}
         <div class="row"><button class="btn sm primary" data-dact="open">Abrir</button><button class="btn sm" data-dact="guided">Editar paso a paso</button><button class="btn sm" data-dact="share">Compartir</button></div>
@@ -664,6 +723,108 @@ $("#btnQuick").onclick = async () => {
     <div><div class="eyebrow">Añadir</div>${sugg.map(x => sugHTML(x, "add")).join("") || '<p class="muted">El esqueleto ya cumple las cifras recomendadas.</p>'}</div></div>`;
 };
 
+/* ---------- mazo a presupuesto ---------- */
+let swaps = [];
+$("#btnBudget").onclick = () => {
+  const out = $("#aiOut");
+  if (!deck.cards.size) { out.innerHTML = '<p class="lo">Primero analiza un mazo.</p>'; return; }
+  const s = A.analyze(deck), def = Math.max(10, Math.round(s.price * 0.5 / 10) * 10);
+  out.innerHTML = `<div class="budget">
+    <p style="margin:0">Ahora el mazo cuesta unos <b>${money(s.price)}</b>. ¿Hasta cuánto quieres gastar?</p>
+    <div class="row">
+      <label class="f inline" for="budgetMax">Precio máximo <input type="number" id="budgetMax" min="0" step="5" value="${def}" style="width:110px"> ${symbol()}</label>
+      <button class="btn primary" id="budgetGo">Calcular cambios</button>
+      <button class="btn ai" id="budgetAI">Con IA</button>
+    </div>
+    <p class="muted small" style="margin:0">Sin IA: cambia las cartas más caras por las más jugadas que cumplen la misma función (ramp, robo, removal…) y cuestan mucho menos. Con IA: Claude elige los cambios teniendo en cuenta la sinergia con tu comandante. Ningún cambio se aplica hasta que lo pulses.</p>
+    <div id="budgetOut"></div></div>`;
+  $("#budgetMax").focus();
+};
+const budgetTarget = () => { const v = parseFloat(String($("#budgetMax").value).replace(",", ".")); return isFinite(v) && v >= 0 ? v : null; };
+async function budgetNoAI() {
+  const bo = $("#budgetOut"), target = budgetTarget();
+  if (target === null) { bo.innerHTML = '<p class="lo">Escribe un precio máximo.</p>'; return; }
+  bo.innerHTML = thinking("Buscando alternativas baratas en tus colores…");
+  const ci = A.ciUnion(deck.cmds), cap = Math.max(1, Math.round(target / 40));
+  let pool;
+  try {
+    const base = `${SF.ciQuery(ci)} legal:commander -t:basic game:paper ${currency()}<=${cap}`, words = A.themeWords(deck.cmds, "");
+    pool = [...await SF.poolFor(ci), ...await SF.search(base, { pages: 3 }).catch(() => []),
+      ...(words.length ? await SF.search(`${base} (${words.slice(0, 4).map(w => `t:${w} or o:${w}`).join(" or ")})`, { pages: 1 }).catch(() => []) : [])];
+  } catch { bo.innerHTML = '<p class="no">No se pudo consultar Scryfall.</p>'; return; }
+  const r = A.budgetSwaps(deck, pool, target, await getBasics().catch(() => ({})));
+  showSwaps(r, target);
+}
+async function budgetWithAI() {
+  const bo = $("#budgetOut"), target = budgetTarget();
+  if (target === null) { bo.innerHTML = '<p class="lo">Escribe un precio máximo.</p>'; return; }
+  if (!(await aiReady(bo))) return;
+  const s = A.analyze(deck), btn = $("#budgetAI"); btn.disabled = true;
+  bo.innerHTML = thinking("Claude está buscando alternativas baratas…");
+  const exp = [...deck.cards.values()].map(e => e.c).filter(c => !A.isBasic(c) && c.price >= 0.5).sort((a, b) => b.price - a.price).slice(0, 40);
+  const prompt = `Abarata este mazo de Commander sin perder su plan de juego.
+Precio actual: ${Math.round(s.price)}; objetivo: ${Math.round(target)} como máximo (precios en ${currencyName()}).
+${deckBrief(s)}
+Cartas más caras (precio por unidad): ${exp.map(c => `${c.name} (${c.price.toFixed(2)})`).join(", ")}
+Propón cambios uno a uno: quita una carta cara y pon otra mucho más barata que cumpla la misma función en el mazo y encaje con el comandante. Empieza por las más caras y para cuando el total baje del objetivo. No toques las tierras básicas.
+Responde SOLO con JSON, con esta forma exacta:
+{"resumen":"1-2 frases sobre cómo queda el mazo","cambios":[{"quitar":"Nombre exacto en inglés","poner":"Nombre exacto en inglés","motivo":"breve: qué función cumple igual"}]}
+Reglas: "quitar" debe estar en la lista. "poner" debe ser legal en Commander, estar dentro de la identidad de color ${s.ci || "incolora"}, no estar ya en la lista y costar menos de la mitad que la carta que sustituye.`;
+  try {
+    const r = await AI.askJSON(prompt, { effort: "medium" });
+    const raw = Array.isArray(r.cambios) ? r.cambios : [];
+    await SF.collection(raw.flatMap(x => [String(x.quitar || ""), String(x.poner || "")]), { fuzzyLimit: 10 }).catch(() => {});
+    const used = new Set(), list = []; let total = s.price, dropped = 0;
+    for (const x of raw) {
+      const o = SF.cached(String(x.quitar || "")), n = SF.cached(String(x.poner || ""));
+      const ok = o && n && deck.cards.has(A.key(o)) && !used.has(A.key(o)) && n.legal && !deck.cards.has(A.key(n)) && !used.has(A.key(n))
+        && (!deck.cmds.length || A.subsetCI(n.ci, s.ci)) && n.price > 0 && n.price < o.price;
+      if (!ok) { dropped++; continue; }
+      used.add(A.key(o)); used.add(A.key(n));
+      list.push({ out: o, in: n, save: o.price - n.price, why: String(x.motivo || "") }); total -= o.price - n.price;
+    }
+    showSwaps({ swaps: list, from: s.price, to: total }, target, `<p style="margin:0">${esc(r.resumen || "")}</p>`
+      + (dropped ? `<p class="muted small" style="margin:0">${dropped} propuesta(s) descartadas por no existir, no ser legales, salirse de tus colores o no ser más baratas.</p>` : ""));
+  } catch (e) { bo.innerHTML = `<p class="no">${esc(AI.errMsg(e))}</p>`; }
+  finally { btn.disabled = false; }
+}
+const thumb = c => c.small ? `<img class="th" src="${esc(c.small)}" alt="" loading="lazy">` : '<span class="th"></span>';
+function showSwaps(r, target, intro = "") {
+  swaps = r.swaps;
+  const bo = $("#budgetOut");
+  if (!swaps.length) {
+    bo.innerHTML = intro + (r.from <= target ? `<p class="ok" style="margin:0">El mazo ya cuesta ${money(r.from)}, por debajo de ${money(target)}.</p>`
+      : '<p class="lo" style="margin:0">No he encontrado alternativas baratas con la misma función. Prueba con un objetivo más alto o con la IA.</p>');
+    return;
+  }
+  bo.innerHTML = `${intro}<p style="margin:0">${swaps.length} ${swaps.length === 1 ? "cambio" : "cambios"}: de <b>${money(r.from)}</b> a <b>${money(r.to)}</b> (objetivo ${money(target)}).${r.to > target ? ' <span class="lo">No llega al objetivo con cambios de la misma función; puedes quitar más a mano.</span>' : ""}</p>
+    <div class="swaps">${swaps.map((x, i) => `<div class="swap">
+      <div class="sw">${thumb(x.out)}<span class="sn">${nameBtn(x.out)}<span class="muted small mono">${cardMoney(x.out)}</span></span></div>
+      <span class="arrow" aria-hidden="true">→</span>
+      <div class="sw">${thumb(x.in)}<span class="sn">${nameBtn(x.in)}<span class="muted small mono">${cardMoney(x.in)}</span></span></div>
+      <button class="btn sm" data-swap="${i}">Cambiar</button>
+      ${x.why ? `<span class="why">${esc(x.why)}</span>` : `<span class="why">Ahorras ${money(x.save, 2)}${x.in.rank < 99999 ? ` · #${x.in.rank} en EDHREC` : ""}</span>`}</div>`).join("")}</div>
+    <div class="row"><button class="btn primary" id="swapAll">Aplicar todos</button></div>`;
+}
+function applySwap(i) {
+  const x = swaps[i]; if (!x) return false;
+  if (!deck.cards.has(A.key(x.out))) return false;
+  removeFromDeck(x.out); addToDeck(x.in); return true;
+}
+$("#aiOut").addEventListener("click", e => {
+  if (e.target.closest("#budgetGo")) { budgetNoAI(); return; }
+  if (e.target.closest("#budgetAI")) { budgetWithAI(); return; }
+  const all = e.target.closest("#swapAll");
+  const one = e.target.closest("[data-swap]");
+  if (!all && !one) return;
+  const btns = all ? [...$("#budgetOut").querySelectorAll("[data-swap]:not(:disabled)")] : [one];
+  let n = 0;
+  for (const b of btns) { if (applySwap(+b.dataset.swap)) n++; b.disabled = true; b.textContent = "Hecho"; b.closest(".swap").classList.add("done"); }
+  if (all) all.disabled = true;
+  syncText(); render(); if (n) toast(n === 1 ? "Cambio aplicado" : `${n} cambios aplicados`);
+});
+$("#aiOut").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "budgetMax") budgetNoAI(); });
+
 function mdHTML(t) {
   const lines = esc(t).split(/\n/); let h = "", inUl = false;
   const inline = x => x.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\*(.+?)\*/g, "<em>$1</em>");
@@ -751,7 +912,7 @@ ${cmdTxt}
 Identidad de color: ${ci || "incolora"}.
 Tema: ${o.theme || "la estrategia más fuerte y divertida para este comandante"}.
 Nivel: ${brDesc}.
-${o.budget ? `Presupuesto: cartas de hasta ${o.budget} dólares cada una aproximadamente.` : ""}
+${o.budget ? `Presupuesto: cartas de hasta ${o.budget} ${currencyName()} cada una aproximadamente.` : ""}
 ${await newsBrief(ci)}
 Esqueleto: 36-37 tierras en total, unas 10 piezas de ramp, 10 de robo, 8-10 de interacción y 2-3 barridos, más sinergia y formas de ganar.
 Responde SOLO con JSON con esta forma exacta:
@@ -790,20 +951,16 @@ $("#newCmds").addEventListener("click", e => {
   $("#bCmd").scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
-/* ---------- Probar mano ---------- */
-function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function newGame(keepMull) {
-  library = []; for (const { c, q } of deck.cards.values()) for (let k = 0; k < q; k++) library.push(c);
-  shuffle(library); hand = library.splice(0, 7).map(c => ({ c, isNew: false })); if (!keepMull) mulls = 0; renderHand();
-}
-function renderHand() {
-  const lands = hand.filter(h => A.isLand(h.c)).length, bottom = Math.max(0, mulls - 1);
-  $("#handInfo").textContent = library.length + hand.length ? `${hand.length} en mano · ${lands} tierras · ${library.length} en la biblioteca${mulls ? ` · mulligan ${mulls}${bottom ? ` (pon ${bottom} al fondo)` : " (gratis)"}` : ""}` : "Analiza o genera un mazo primero.";
-  $("#hand").innerHTML = hand.map(h => vcard(h.c, "", h.isNew ? "new" : "")).join("");
-}
-$("#btnNewHand").onclick = () => newGame(false);
-$("#btnMull").onclick = () => { mulls++; newGame(true); };
-$("#btnDraw").onclick = () => { if (!library.length) return; hand.forEach(h => h.isNew = false); hand.push({ c: library.shift(), isNew: true }); renderHand(); };
+/* ---------- moneda ---------- */
+const curSel = $("#currency");
+curSel.value = currency();
+curSel.onchange = () => setCurrency(curSel.value);
+function updateBudgetLabels() { document.querySelectorAll("#bBudget option[data-cur]").forEach(o => { o.textContent = `Hasta ${o.value.replace(".", ",")} ${symbol()}`; }); }
+updateBudgetLabels();
+addEventListener("currencychange", () => {
+  curSel.value = currency(); updateBudgetLabels(); render();
+  if (!$("#view-mazos").hidden) renderDecks();
+});
 
 /* ---------- contraseña de la IA ---------- */
 const dlg = $("#passDlg");
@@ -832,7 +989,7 @@ function askName(title, value) {
 /* ---------- navegación ---------- */
 let cmdsLoaded = false;
 function route() {
-  const views = ["analizar", "construir", "guiado", "mazos", "mano"];
+  const views = ["analizar", "construir", "guiado", "mazos", "comparar", "coleccion", "mano"];
   const h = location.hash.slice(1);
   // Enlace de un mazo compartido: #compartido/<id>
   const shared = /^compartido\/([0-9a-f-]{36})$/i.exec(h);
@@ -845,7 +1002,9 @@ function route() {
   const v = views.includes(h) ? h : "analizar";
   views.forEach(x => { $("#view-" + x).hidden = x !== v; });
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
-  if (v === "mano" && !hand.length && deck.cards.size) newGame(false); else if (v === "mano") renderHand();
+  if (v === "mano") showGoldfish();
+  if (v === "comparar") showCompare();
+  if (v === "coleccion") showCollection();
   if (v === "construir" && !cmdsLoaded) { cmdsLoaded = true; renderNewCommanders(); }
   if (v === "guiado") showGuided();
   if (v === "mazos") { renderDecks(); renderCloud(); }
@@ -853,6 +1012,17 @@ function route() {
 window.addEventListener("hashchange", route);
 
 initShared({ esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck });
+initGoldfish({ esc, toast, getDeck: () => deck });
+initCompare({
+  esc, pipsHTML, manaHTML, thinking, buildDeck,
+  currentText: () => deck.cards.size || deck.cmds.length ? A.deckToText(deck) : $("#deckText").value,
+  openInAnalyze: async text => {
+    $("#deckText").value = text; $("#cmd1").value = ""; $("#cmd2").value = "";
+    location.hash = "analizar";
+    await loadFromText(text); setDeckId(null); setCmdInputs(); render(); $("#aiOut").innerHTML = "";
+  },
+});
+initCollection({ esc, toast, attachAC, thinking, pipsHTML, getDeck: () => deck, onChange: () => { renderColDeck(); if (!$("#view-mazos").hidden) renderDecks(); } });
 
 initGuided({
   esc, manaHTML, pipsHTML, toast, attachAC, thinking, cmdQuery, aiReady,

@@ -54,13 +54,14 @@ export const TARGETS = [
 ];
 export const BRK = { 1: "Exhibition", 2: "Core", 3: "Upgraded", 4: "Optimized", 5: "cEDH" };
 
-export function analyze(d) {
+// `combos` (opcional): resultado de Combos.findCombos para este mazo; los combos cuentan para el bracket.
+export function analyze(d, { combos = null } = {}) {
   const ci = ciUnion(d.cmds);
   const s = { ci, total: d.cmds.length, lands: 0, ramp: 0, draw: 0, removal: 0, wipes: 0, tutors: 0, counters: 0, gc: [],
-    curve: [0, 0, 0, 0, 0, 0, 0, 0], types: {}, pips: { W: 0, U: 0, B: 0, R: 0, G: 0 }, price: 0, cmcSum: 0, nonland: 0, ranks: [], offColor: [], dupes: [] };
-  d.cmds.forEach(c => { s.price += c.price; if (c.gc) s.gc.push(c); });
+    curve: [0, 0, 0, 0, 0, 0, 0, 0], types: {}, pips: { W: 0, U: 0, B: 0, R: 0, G: 0 }, price: 0, usd: 0, eur: 0, cmcSum: 0, nonland: 0, ranks: [], offColor: [], dupes: [] };
+  d.cmds.forEach(c => { s.price += c.price; s.usd += c.usd || 0; s.eur += c.eur || 0; if (c.gc) s.gc.push(c); });
   for (const { c, q } of d.cards.values()) {
-    s.total += q; s.price += c.price * q;
+    s.total += q; s.price += c.price * q; s.usd += (c.usd || 0) * q; s.eur += (c.eur || 0) * q;
     if (q > 1 && !isBasic(c) && !/any number of cards named/i.test(c.text)) s.dupes.push(c);
     if (d.cmds.length && !subsetCI(c.ci, ci)) s.offColor.push(c);
     const g = groupOf(c); s.types[g] = (s.types[g] || 0) + q;
@@ -84,6 +85,13 @@ export function analyze(d) {
   s.grade = s.score >= 90 ? "A+" : s.score >= 82 ? "A" : s.score >= 75 ? "B+" : s.score >= 67 ? "B" : s.score >= 58 ? "C+" : s.score >= 50 ? "C" : "D";
   const gc = s.gc.length;
   s.bracket = gc === 0 && s.tutors <= 3 ? 2 : gc <= 3 ? 3 : (gc >= 7 && s.avgCmc < 2.6 && s.tutors >= 5 ? 5 : 4);
+  if (combos) {
+    const inf = v => v.produces.some(p => /infinite|win the game|lose the game/i.test(p));
+    s.combos = combos.included.length;
+    s.twoCard = combos.included.filter(v => v.cards.length <= 2 && inf(v)).length;
+    s.ruthless = combos.included.filter(v => v.tag === "R").length;
+    if (s.ruthless) s.bracket = Math.max(s.bracket, 4); else if (s.twoCard) s.bracket = Math.max(s.bracket, 3);
+  }
   s.level = s.bracket >= 4 && s.score >= 82 ? "Competitivo" : s.score >= 75 ? "Fuerte" : s.score >= 58 ? "Mejorado" : "Nivel precon";
   return s;
 }
@@ -142,4 +150,46 @@ export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, t
     if (!worst) break; cards.delete(key(worst.c));
   }
   return cards;
+}
+
+// Mazo a presupuesto sin IA: cambia las cartas más caras por otras muy jugadas y mucho más baratas que
+// cumplan la misma función (ramp, robo, removal… o el mismo tipo si no tiene etiqueta), hasta bajar de `target`.
+// `pool`: cartas candidatas (ordenadas o no); `basics`: { W: carta, U: carta, … } para sustituir tierras caras.
+// Devuelve { swaps: [{ out, in, save }], from, to }.
+export function budgetSwaps(d, pool, target, basics = {}) {
+  const s = analyze(d), ci = ciUnion(d.cmds);
+  const from = s.price; let total = from;
+  const swaps = [];
+  if (total <= target) return { swaps, from, to: total };
+  const taken = new Set([...d.cards.keys(), ...d.cmds.map(key)]);
+  const seen = new Set(), words = themeWords(d.cmds, "");
+  // Primero las que encajan con el comandante (tipo de criatura, temas de su texto) y luego las más jugadas.
+  const syn = c => words.length && words.some(w => norm(c.name + " " + c.type + " " + c.sub + " " + c.text).includes(w));
+  const score = c => c.rank / (syn(c) ? 6 : 1);
+  const cands = pool.filter(c => { const k = key(c); if (seen.has(k)) return false; seen.add(k);
+    return c.legal && !isBasic(c) && c.price > 0 && subsetCI(c.ci, ci) && !taken.has(k); }).sort((a, b) => score(a) - score(b));
+  const nCards = Math.max(1, s.total - d.cmds.length);
+  const same = (c, r) => {
+    if (isLand(c)) return isLand(r);
+    if (isLand(r) || r.cmc > c.cmc + 1) return false;
+    // Sin etiqueta (una criatura del tema, un motor…): misma clase de carta y, si encajaba con el comandante, la nueva también.
+    return c.flags ? !!(r.flags & c.flags) : groupOf(r) === groupOf(c) && (!syn(c) || syn(r));
+  };
+  // Color con más símbolos de maná en el mazo, para cambiar tierras caras por básicas.
+  const cols = ci ? [...ci] : ["C"];
+  const topCol = cols.slice().sort((a, b) => (s.pips[b] || 0) - (s.pips[a] || 0))[0];
+  const expensive = [...d.cards.values()].map(e => e.c).filter(c => !isBasic(c) && c.price >= 1).sort((a, b) => b.price - a.price);
+  for (const c of expensive) {
+    if (total <= target) break;
+    const cap = Math.min(c.price * 0.4, Math.max(1, target / nCards * 2));
+    let r = cands.find(x => !taken.has(key(x)) && x.price <= cap && same(c, x));
+    if (!r && isLand(c) && !c.flags) r = basics[topCol] || null;
+    if (!r) continue;
+    const save = c.price - (r.price || 0);
+    if (save <= 0) continue;
+    if (!isBasic(r)) taken.add(key(r));
+    swaps.push({ out: c, in: r, save });
+    total -= save;
+  }
+  return { swaps, from, to: total };
 }

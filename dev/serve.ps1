@@ -106,6 +106,28 @@ function Invoke-Claude($ctx) {
   }
 }
 
+# Combos: puente con Commander Spellbook, cuya API no admite peticiones desde el navegador (como api/combos.js en Vercel).
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+function Invoke-Combos($ctx) {
+  $res = $ctx.Response
+  $reader = New-Object IO.StreamReader($ctx.Request.InputStream, $utf8)
+  $body = $reader.ReadToEnd()
+  if ($body.Length -gt 60000) { $res.StatusCode = 400; Send-Json $res @{ error = 'Petición no válida' }; return }
+  $res.ContentType = 'application/json; charset=utf-8'
+  try {
+    $wc = New-Object Net.WebClient
+    $wc.Encoding = $utf8
+    $wc.Headers['Content-Type'] = 'application/json'
+    $wc.Headers['Accept'] = 'application/json'
+    $txt = $wc.UploadString('https://backend.commanderspellbook.com/find-my-combos', 'POST', $body)
+    $b = $utf8.GetBytes($txt)
+    $res.OutputStream.Write($b, 0, $b.Length)
+  } catch {
+    $res.StatusCode = 502
+    Send-Json $res @{ error = 'No se pudo conectar con Commander Spellbook' }
+  }
+}
+
 $types = @{ '.html' = 'text/html; charset=utf-8'; '.js' = 'text/javascript; charset=utf-8'; '.css' = 'text/css; charset=utf-8'; '.json' = 'application/json'; '.svg' = 'image/svg+xml'; '.png' = 'image/png'; '.ico' = 'image/x-icon' }
 # Si el puerto está ocupado (otro servidor abierto, otro programa), prueba los siguientes.
 $l = $null
@@ -125,7 +147,14 @@ while ($l.IsListening) {
   $ctx = $l.GetContext()
   $path = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
   try {
-    if ($path -eq 'api/claude') {
+    if ($path -eq 'api/combos') {
+      $origin = $ctx.Request.Headers['Origin']
+      if ($ctx.Request.HttpMethod -ne 'POST') { $ctx.Response.StatusCode = 405 }
+      elseif (($origin -and $origin -ne "http://localhost:$Port") -or $ctx.Request.ContentType -notlike 'application/json*') {
+        $ctx.Response.StatusCode = 403
+        Send-Json $ctx.Response @{ error = 'Origen no permitido'; code = 'forbidden' }
+      } else { Invoke-Combos $ctx }
+    } elseif ($path -eq 'api/claude') {
       if ($ctx.Request.HttpMethod -eq 'GET') {
         $ctx.Response.ContentType = 'application/json'
         Send-Json $ctx.Response @{ ok = $true; mode = 'local'; configured = (Test-ClaudeLogin); found = [bool]$claude; password = $false }

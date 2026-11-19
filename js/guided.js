@@ -3,6 +3,7 @@
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
+import { money, cardMoney } from "./currency.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
@@ -128,7 +129,7 @@ function tile(c, attr) {
     <button class="gpickbtn" data-${attr}="${e(c.name)}" ${attr === "pick" ? `aria-pressed="${on}"` : ""} aria-label="${attr === "pick" ? (on ? "Quitar " : "Añadir ") : "Elegir "}${e(c.name)}">
       ${c.img ? `<img src="${e(c.img)}" alt="" loading="lazy">` : `<span class="noimg">${e(c.name)}</span>`}<span class="gcheck" aria-hidden="true">✓</span></button>
     <div class="gmeta"><button class="cn" data-name="${e(c.name)}">${e(c.name)}</button>
-      <div class="gbadges">${attr === "cmd" ? H.pipsHTML(c.ci) : ""}${attr === "pick" && isSyn(c) ? '<span class="gb syn">Sinergia</span>' : ""}<span class="gb">${c.rank >= 99999 ? "sin ranking" : "#" + c.rank}</span>${c.gc ? '<span class="gb gc">GC</span>' : ""}<span class="gb">${c.price ? c.price.toFixed(2) + " $" : "–"}</span></div></div></div>`;
+      <div class="gbadges">${attr === "cmd" ? H.pipsHTML(c.ci) : ""}${attr === "pick" && isSyn(c) ? '<span class="gb syn">Sinergia</span>' : ""}<span class="gb">${c.rank >= 99999 ? "sin ranking" : "#" + c.rank}</span>${c.gc ? '<span class="gb gc">GC</span>' : ""}<span class="gb">${cardMoney(c)}</span></div></div></div>`;
 }
 
 /* ---------- 1. elegir comandante ---------- */
@@ -178,7 +179,7 @@ function renderBar() {
     <div class="gbar-cmd">${c0.art ? `<img class="gthumb" src="${e(c0.art)}" alt="">` : ""}<div style="min-width:0"><div class="gname">${st.cmds.map(c => e(c.name)).join(" + ")}</div><div class="muted small">Construyendo · ${H.pipsHTML(s.ci)}</div></div></div>
     <div class="gbar-prog"><div><b class="mono">${s.total}</b> de 100 cartas</div><div class="gtrack"><span style="width:${Math.min(100, s.total)}%"></span></div></div>
     <div class="gstats">
-      <div><span class="eyebrow">Precio</span><b>${Math.round(s.price)} $</b></div>
+      <div><span class="eyebrow">Precio</span><b>${money(s.price)}</b></div>
       <div><span class="eyebrow">Coste medio</span><b>${s.avgCmc.toFixed(2)}</b></div>
       <div><span class="eyebrow">Bracket</span><b>B${s.bracket}</b></div>
       <div><span class="eyebrow">Game Changers</span><b>${s.gc.length}</b></div>
@@ -438,6 +439,7 @@ export function initGuided(helpers) {
     renderGrid();
   });
   $("#view-guiado").addEventListener("click", e => { const b = e.target.closest("[data-gact]"); if (b) onAction(b.dataset.gact); });
+  addEventListener("currencychange", () => { if (st.cmds.length && !$("#gBuild").hidden) { renderBar(); renderGrid(); } });
 }
 
 // Abre un mazo ya hecho (por ejemplo, el de «Analizar») en el constructor para seguir editándolo.

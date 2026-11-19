@@ -3,6 +3,7 @@
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as Cloud from "./cloud.js";
+import { money } from "./currency.js";
 
 const $ = s => document.querySelector(s);
 let H = null; // utilidades de app.js: esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck
@@ -20,6 +21,7 @@ export function initShared(helpers) {
     if (e.target.closest("#sSend")) send();
     if (e.target.closest("#sAgain")) { sh.cuts.clear(); sh.adds.clear(); renderAll(); }
   });
+  addEventListener("currencychange", () => { if (sh.deck && !$("#view-compartido").hidden) renderAll(); });
   root.addEventListener("input", e => {
     const w = e.target.closest("[data-swhy]");
     if (w) { const [kind, k] = w.dataset.swhy.split("|"); const it = sh[kind].get(k); if (it) it.why = w.value; }
@@ -53,7 +55,7 @@ function renderAll() {
     <div class="panel sshead">
       ${c0 && c0.art ? `<img class="gthumb" src="${e(c0.art)}" alt="">` : ""}
       <div style="min-width:0"><div class="gname">${d.cmds.map(c => `<button class="cn" data-name="${e(c.name)}">${e(c.name)}</button>`).join(" + ") || "Sin comandante"}</div><div class="muted small">${H.pipsHTML(s.ci)}</div></div>
-      <div class="gstats"><div><span class="eyebrow">Cartas</span><b>${s.total}</b></div><div><span class="eyebrow">Precio</span><b>${Math.round(s.price)} $</b></div><div><span class="eyebrow">Coste medio</span><b>${s.avgCmc.toFixed(2)}</b></div><div><span class="eyebrow">Bracket</span><b>B${s.bracket}</b></div></div>
+      <div class="gstats"><div><span class="eyebrow">Cartas</span><b>${s.total}</b></div><div><span class="eyebrow">Precio</span><b>${money(s.price)}</b></div><div><span class="eyebrow">Coste medio</span><b>${s.avgCmc.toFixed(2)}</b></div><div><span class="eyebrow">Bracket</span><b>B${s.bracket}</b></div></div>
     </div>
     <div class="scols">
       <div id="sDeck"></div>

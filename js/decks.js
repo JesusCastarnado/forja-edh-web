@@ -37,7 +37,7 @@ export function upsert({ id, name, cmds, cards }) {
   const d = {
     id: id || newId(), name: String(name || "").trim().slice(0, 80) || cmds.map(c => c.name).join(" + ") || "Mazo sin nombre",
     cmds: cmds.map(c => c.name), text: A.deckToText({ cmds, cards }), updated: now,
-    stats: { total: s.total, price: Math.round(s.price), bracket: s.bracket, grade: s.grade, ci: s.ci, art: (cmds[0] && cmds[0].art) || "" },
+    stats: { total: s.total, price: Math.round(s.usd), usd: Math.round(s.usd), eur: Math.round(s.eur), bracket: s.bracket, grade: s.grade, ci: s.ci, art: (cmds[0] && cmds[0].art) || "" },
   };
   const i = all.findIndex(x => x.id === d.id);
   if (i >= 0) { d.created = all[i].created || now; all[i] = d; } else { d.created = now; all.push(d); }

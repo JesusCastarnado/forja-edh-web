@@ -2,17 +2,18 @@
 // Regla de sincronización: por cada mazo gana la versión con `updated` más reciente; los borrados
 // viajan como marcas (`deleted`) para que también desaparezcan en los demás dispositivos.
 import * as Decks from "./decks.js";
+import * as Coll from "./collection.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
 const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/+esm"; // admite las claves «publishable»
 const COLS = "id,name,cmds,text,stats,created,updated,deleted";
 
-let client = null, user = null, syncing = null, timer = null, lastSync = 0, lastError = "", suggestions = [];
+let client = null, user = null, syncing = null, timer = null, lastSync = 0, lastError = "", suggestions = [], colError = "";
 let readyResolve; const readyP = new Promise(r => { readyResolve = r; });
 const listeners = new Set();
 
 export const configured = () => Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-export const state = () => ({ configured: configured(), ready: !!client, user, lastSync, syncing: !!syncing, error: lastError, suggestions });
+export const state = () => ({ configured: configured(), ready: !!client, user, lastSync, syncing: !!syncing, error: lastError, suggestions, colError });
 // Espera a que la nube esté lista (o a que se sepa que no hay nube). Devuelve true si hay cliente.
 export const whenReady = () => configured() ? readyP.then(() => !!client) : Promise.resolve(false);
 export const onState = cb => listeners.add(cb);
@@ -35,6 +36,7 @@ export async function init() {
       if (user && user.id !== was) sync();
     });
     Decks.onChange(schedule);
+    Coll.onChange(src => { if (src !== "sync") schedule(); });
     addEventListener("focus", () => { if (user && Date.now() - lastSync > 60_000) sync(); });
     emit();
     if (user) sync();
@@ -91,11 +93,32 @@ async function run() {
       upsert: async rows => { if (!rows.length) return; const { error } = await client.from("decks").upsert(rows.map(r => ({ ...r, user_id: uid }))); if (error) throw error; },
     });
     lastSync = Date.now(); lastError = "";
+    await syncCollection();
     await loadSuggestions();
     return changed;
   } catch (e) {
     lastError = "Error al sincronizar: " + (e.message || e);
     return false;
+  }
+}
+
+// Colección y lista de deseos: una fila por usuario con todas sus cartas; se mezcla carta a carta.
+// Si la tabla aún no existe (falta volver a ejecutar supabase/schema.sql), los mazos se sincronizan igual.
+async function syncCollection() {
+  try {
+    const { data, error } = await client.from("collections").select("items").maybeSingle();
+    if (error) throw error;
+    const r = Coll.merge(data ? data.items : {});
+    if (r.push || (!data && Object.keys(Coll._raw()).length)) {
+      const { error: e2 } = await client.from("collections").upsert({ user_id: user.id, items: Coll._raw(), updated: Date.now() });
+      if (e2) throw e2;
+    }
+    colError = "";
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    colError = /collections|42P01|PGRST20/.test(msg + (e && e.code))
+      ? "La colección no se guarda en la nube: falta su tabla en Supabase (vuelve a ejecutar supabase/schema.sql en el SQL Editor)."
+      : "No se pudo sincronizar la colección: " + msg;
   }
 }
 

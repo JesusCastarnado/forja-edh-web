@@ -19,8 +19,11 @@
       <a href="#construir" data-view="construir">Construir</a>
       <a href="#guiado" data-view="guiado">Paso a paso</a>
       <a href="#mazos" data-view="mazos">Mis mazos</a>
+      <a href="#comparar" data-view="comparar">Comparar</a>
+      <a href="#coleccion" data-view="coleccion">Colección</a>
       <a href="#mano" data-view="mano">Probar mano</a>
     </nav>
+    <select id="currency" class="cursel" aria-label="Moneda de los precios" title="Moneda de los precios"><option value="usd">$ USD</option><option value="eur">€ EUR</option></select>
     <button class="btn sm" id="btnPass" hidden>Clave IA</button>
   </div>
 </header>
@@ -79,6 +82,7 @@
           <button class="btn primary ai" id="btnOpt">Optimizar con IA</button>
           <button class="btn ai" id="btnXray">Radiografía del mazo</button>
           <button class="btn" id="btnQuick">Sugerencias rápidas</button>
+          <button class="btn" id="btnBudget" title="Cambia las cartas caras por otras baratas de la misma función">A presupuesto</button>
           <label class="f inline" for="optBracket">Bracket objetivo
             <select id="optBracket"><option value="">Mantener</option><option value="2">B2 Core</option><option value="3">B3 Upgraded</option><option value="4">B4 Optimized</option><option value="5">B5 cEDH</option></select></label>
         </div>
@@ -99,6 +103,11 @@
       <div class="panel"><h3>Tipos y colores</h3><div class="kv" id="types"></div><div style="margin-top:12px" id="colors"></div></div>
       <div class="panel"><h3>Mano inicial</h3><div id="handOdds"></div></div>
       <div class="panel"><h3>Avisos</h3><ul class="issues" id="issues"></ul></div>
+      <div class="panel">
+        <div class="row between"><h3 style="margin:0">Combos</h3><a class="small" href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a></div>
+        <div id="combos" style="margin-top:10px"></div>
+      </div>
+      <div class="panel"><h3>Tu colección</h3><div id="colDeck"></div></div>
     </div>
   </div>
 </section>
@@ -121,7 +130,7 @@
         <label class="f" for="bBracket">Bracket
           <select id="bBracket"><option value="2">B2 · Core (precon)</option><option value="3" selected>B3 · Upgraded</option><option value="4">B4 · Optimized</option><option value="5">B5 · cEDH</option></select></label>
         <label class="f" for="bBudget">Presupuesto por carta
-          <select id="bBudget"><option value="0">Sin límite</option><option value="5">Hasta 5 $</option><option value="1.5">Hasta 1,5 $</option></select></label>
+          <select id="bBudget"><option value="0">Sin límite</option><option value="5" data-cur>Hasta 5 $</option><option value="1.5" data-cur>Hasta 1,5 $</option></select></label>
       </div>
       <div class="row">
         <button class="btn primary ai" id="btnGenAI">Que la IA lo genere</button>
@@ -240,24 +249,116 @@
 <!-- ===================== MAZO COMPARTIDO (#compartido/<id>) ===================== -->
 <section id="view-compartido" hidden><div id="shareView"></div></section>
 
-<!-- ===================== MANO ===================== -->
-<section id="view-mano" hidden>
+<!-- ===================== COMPARAR ===================== -->
+<section id="view-comparar" hidden>
   <div class="hero">
-    <h2>Roba siete.</h2>
-    <p>Prueba manos iniciales con la regla de mulligan de Commander: el primero es gratis y después devuelves cartas al fondo.</p>
+    <h2>Mazo contra mazo.</h2>
+    <p>Elige dos de tus mazos o pega dos listas y mira qué cambia: cartas que solo están en uno, cartas en común, curva, esqueleto, precio y bracket.</p>
   </div>
-  <div class="panel">
-    <div class="row">
-      <button class="btn primary" id="btnNewHand">Nueva mano</button>
-      <button class="btn" id="btnMull">Mulligan</button>
-      <button class="btn" id="btnDraw">Robar carta</button>
-      <span class="muted" id="handInfo"></span>
+  <div class="cmpin">
+    <div class="panel cmpside" style="--k:var(--accent)">
+      <div class="row between"><h3 style="margin:0"><span class="cmpdot"></span>Mazo A</h3><select id="cmpPickA" aria-label="Elegir el mazo A"></select></div>
+      <textarea id="cmpTextA" spellcheck="false" aria-label="Lista del mazo A" placeholder="Commander&#10;1 Edgar Markov&#10;&#10;Deck&#10;1 Sol Ring&#10;..."></textarea>
     </div>
-    <div class="hand" id="hand"></div>
+    <div class="panel cmpside" style="--k:var(--mU)">
+      <div class="row between"><h3 style="margin:0"><span class="cmpdot"></span>Mazo B</h3><select id="cmpPickB" aria-label="Elegir el mazo B"></select></div>
+      <textarea id="cmpTextB" spellcheck="false" aria-label="Lista del mazo B" placeholder="Pega aquí la otra lista…"></textarea>
+    </div>
+  </div>
+  <div class="row" style="margin-block:14px">
+    <button class="btn primary" id="cmpBtn">Comparar</button>
+    <button class="btn" id="cmpSwap" title="Intercambia A y B">⇄ Intercambiar</button>
+    <div class="status" id="cmpStatus"></div>
+  </div>
+  <div id="cmpOut"></div>
+</section>
+
+<!-- ===================== COLECCIÓN ===================== -->
+<section id="view-coleccion" hidden>
+  <div class="hero">
+    <h2>Lo que tienes y lo que buscas.</h2>
+    <p>Marca las cartas que tienes físicamente. En Analizar verás cuántas te faltan de cada mazo, cuánto cuestan y la lista de la compra. Si entras con tu cuenta en «Mis mazos», la colección también se guarda en la nube.</p>
+  </div>
+  <div class="panel colstats" id="colStats"></div>
+  <div class="colgrid">
+    <div class="panel">
+      <div class="row between" style="margin-bottom:10px">
+        <h3 style="margin:0">Tus cartas</h3>
+        <div class="row">
+          <input type="text" id="colFilter" autocomplete="off" placeholder="Filtrar…" aria-label="Filtrar la colección" style="width:min(200px,100%)">
+          <select id="colSort" aria-label="Ordenar la colección" style="width:auto"><option value="name">Por nombre</option><option value="price">Por precio</option><option value="recent">Recientes</option></select>
+        </div>
+      </div>
+      <div class="ac"><input type="text" id="colAdd" autocomplete="off" placeholder="Añadir una carta a tu colección…" aria-label="Añadir carta a la colección"></div>
+      <div id="colList" style="margin-top:10px"></div>
+      <div class="row gmore"><button class="btn" id="colMore" hidden>Ver más</button></div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <h3>Importar cartas</h3>
+        <label class="f" for="colText">Lista «1 Nombre» o un CSV de ManaBox, Moxfield o Deckbox
+          <textarea id="colText" spellcheck="false" placeholder="4 Lightning Bolt&#10;1 Sol Ring&#10;1 Command Tower&#10;..."></textarea></label>
+        <div class="row" style="margin-top:8px">
+          <select id="colMode" aria-label="Cómo importar" style="width:auto"><option value="add">Sumar a lo que tengo</option><option value="set">Reemplazar las cantidades</option></select>
+          <button class="btn primary" id="colImport">Importar</button>
+          <label class="btn" for="colFile" style="cursor:pointer">Desde archivo</label>
+          <input type="file" id="colFile" accept=".txt,.csv,text/plain,text/csv" hidden>
+        </div>
+        <div class="status" id="colImportStatus" style="margin-top:8px"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm" id="colExport">Descargar colección (.txt)</button>
+          <button class="btn sm danger" id="colClear">Vaciar colección</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="row between"><h3 style="margin:0">Lista de deseos</h3><span class="muted small mono" id="wishTotal"></span></div>
+        <div class="ac" style="margin-top:10px"><input type="text" id="wishAdd" autocomplete="off" placeholder="Añadir una carta que quieres…" aria-label="Añadir carta a la lista de deseos"></div>
+        <div id="wishList" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:10px"><button class="btn sm" id="wishCopy">Copiar lista de la compra</button></div>
+      </div>
+    </div>
   </div>
 </section>
 
-<footer>Datos e imágenes de cartas de <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>, con el ranking de popularidad de EDHREC y precios en USD. Proyecto no oficial; Magic: The Gathering y sus imágenes son de Wizards of the Coast.</footer>
+<!-- ===================== MANO ===================== -->
+<section id="view-mano" hidden>
+  <div class="hero">
+    <h2>Roba siete y juega.</h2>
+    <p>Prueba manos con la regla de mulligan de Commander (el primero es gratis) y juega los primeros turnos en solitario: baja tierras, lanza hechizos con el maná que tienes y comprueba si el mazo arranca. O simula mil partidas de golpe.</p>
+  </div>
+  <div class="panel gfpanel">
+    <div class="row">
+      <button class="btn" id="btnNewHand">Nueva mano</button>
+      <button class="btn" id="btnMull">Mulligan</button>
+      <button class="btn primary" id="btnKeep">Quedarme con esta mano</button>
+      <button class="btn primary" id="btnNextTurn" hidden>Siguiente turno →</button>
+      <button class="btn" id="btnDraw">Robar carta</button>
+      <label class="small muted chk"><input type="checkbox" id="gfDrawFirst" checked> Robar en el turno 1 (multijugador)</label>
+    </div>
+    <div class="gfbar" id="gfBar"></div>
+    <div class="gfzone"><h4>Mano <span class="muted" id="handInfo"></span></h4><div class="hand" id="hand"></div></div>
+    <div id="gfBoard" hidden>
+      <div class="gfrow">
+        <div class="gfzone"><h4>Zona de mando</h4><div class="gfcards" id="gfCmd"></div></div>
+        <div class="gfzone" style="flex:1"><h4>Tierras <span class="muted mono" id="gfLandsN"></span></h4><div class="gfcards" id="gfLands"></div></div>
+      </div>
+      <div class="gfzone"><h4>Permanentes <span class="muted mono" id="gfPermsN"></span></h4><div class="gfcards" id="gfPerms"></div></div>
+      <div class="gfzone"><h4>Cementerio <span class="muted mono" id="gfGraveN"></span></h4><div class="gfcards" id="gfGrave"></div></div>
+    </div>
+    <p class="muted small" style="margin:10px 0 0">Pulsa una carta de la mano para jugarla: las tierras, una por turno; los hechizos, si te llega el maná (tierras y piedras o criaturas de maná que no estén mareadas). Los hechizos de ramp que buscan tierras las ponen solas en el campo. Pulsa una carta del campo para devolverla a la mano.</p>
+  </div>
+  <div class="gfcols">
+    <div class="panel"><h3>Registro</h3><ol class="gflog" id="gfLog"></ol></div>
+    <div class="panel">
+      <h3>Simular mil partidas</h3>
+      <p class="muted small" style="margin:0 0 10px">Juega 1.000 partidas en solitario de forma automática (mulligan si la mano tiene menos de 2 o más de 5 tierras; cada turno baja tierra, lanza el ramp y el comandante en cuanto puede) y mide cómo arranca el mazo.</p>
+      <button class="btn primary" id="gfSim">Simular</button>
+      <div id="gfSimOut" style="margin-top:12px"></div>
+    </div>
+  </div>
+</section>
+
+<footer>Datos e imágenes de cartas de <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>, con el ranking de popularidad de EDHREC y precios de TCGplayer (USD) o Cardmarket (EUR). Combos de <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a>. Proyecto no oficial; Magic: The Gathering y sus imágenes son de Wizards of the Coast.</footer>
 </main>
 
 <img id="peek" alt="" hidden>

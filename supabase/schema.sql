@@ -82,3 +82,20 @@ end $$;
 
 grant execute on function public.shared_deck(uuid) to anon, authenticated;
 grant execute on function public.suggest(uuid, text, text, jsonb, jsonb) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Colección y lista de deseos: una fila por usuario con todas sus cartas
+-- ({ clave: { n: nombre, q: copias, w: en la lista de deseos, u: ms de la última modificación } }).
+
+create table if not exists public.collections (
+  user_id  uuid   primary key default auth.uid() references auth.users (id) on delete cascade,
+  items    jsonb  not null default '{}',
+  updated  bigint not null default 0
+);
+
+alter table public.collections enable row level security;
+drop policy if exists "Cada uno su colección" on public.collections;
+create policy "Cada uno su colección" on public.collections
+  for all to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

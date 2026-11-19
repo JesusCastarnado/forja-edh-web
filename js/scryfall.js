@@ -1,5 +1,6 @@
 // Capa de acceso a Scryfall (https://scryfall.com/docs/api).
 // Scryfall pide 50-100 ms entre peticiones: todas pasan por throttle().
+import { currency } from "./currency.js";
 const API = "https://api.scryfall.com";
 let nextSlot = 0;
 async function throttle() {
@@ -59,8 +60,10 @@ export function toCard(o) {
   const c = {
     name: o.name, cost: o.mana_cost || f0.mana_cost || "", cmc: o.cmc || 0, type, sub,
     ci: (o.color_identity || []).join(""), rank: o.edhrec_rank || 99999,
-    // Solo dólares: la web muestra los precios en $ y mezclar euros falseaba el total.
-    price: parseFloat(p.usd || p.usd_foil || "0") || 0,
+    // Los dos precios por separado (nunca se mezclan); `price` da el de la moneda elegida.
+    usd: parseFloat(p.usd || p.usd_foil || p.usd_etched || "0") || 0,
+    eur: parseFloat(p.eur || p.eur_foil || p.eur_etched || "0") || 0,
+    get price() { return currency() === "eur" ? this.eur : this.usd; },
     text, img: img.normal || "", small: img.small || "", art: img.art_crop || "", back: backImg,
     gc: !!o.game_changer, legal: (o.legalities || {}).commander === "legal",
     released: o.released_at || "", set: o.set_name || "", uri: o.scryfall_uri || "",
