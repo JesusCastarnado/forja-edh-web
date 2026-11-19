@@ -2,6 +2,11 @@
 // La clave (ANTHROPIC_API_KEY) vive solo aquí, en el servidor; el navegador nunca la ve.
 // Respuesta en NDJSON: {"t":"texto"} por cada trozo, y al final {"done":true,"stop":"end_turn"} o {"error":"...","code":"..."}.
 import Anthropic from "@anthropic-ai/sdk";
+import { createHash, timingSafeEqual } from "node:crypto";
+
+// Compara en tiempo constante (con hash para igualar longitudes) y no da pistas sobre la contraseña.
+const sha = s => createHash("sha256").update(String(s ?? "")).digest();
+const samePass = (a, b) => timingSafeEqual(sha(a), sha(b));
 
 const client = new Anthropic(); // lee ANTHROPIC_API_KEY del entorno
 const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5-5";
@@ -20,7 +25,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, configured: Boolean(process.env.ANTHROPIC_API_KEY), password: needPass, model: MODEL });
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
-  if (needPass && req.headers["x-app-password"] !== process.env.APP_PASSWORD) {
+  if (needPass && !samePass(req.headers["x-app-password"], process.env.APP_PASSWORD)) {
     return res.status(401).json({ error: "Contraseña incorrecta", code: "auth" });
   }
   if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "Falta ANTHROPIC_API_KEY en el servidor", code: "not_configured" });
@@ -33,8 +38,12 @@ export default async function handler(req, res) {
   res.writeHead(200, { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" });
   const send = obj => res.write(JSON.stringify(obj) + "\n");
 
+  // Si el navegador cancela (botón Detener) o se va, cortamos el stream para no pagar tokens que nadie leerá.
+  let stream = null, gone = false;
+  res.on("close", () => { if (!res.writableFinished) { gone = true; stream?.abort(); } });
+
   try {
-    const stream = client.beta.messages.stream({
+    stream = client.beta.messages.stream({
       model: MODEL,
       max_tokens: 32000,
       thinking: { type: "adaptive" },
@@ -51,6 +60,7 @@ export default async function handler(req, res) {
     const msg = await stream.finalMessage();
     send({ done: true, stop: msg.stop_reason });
   } catch (err) {
+    if (gone) return;
     let code = "upstream", error = "Error al hablar con Claude";
     if (err instanceof Anthropic.RateLimitError) { code = "rate_limited"; error = "Límite de uso de la API alcanzado"; }
     else if (err instanceof Anthropic.AuthenticationError) { code = "server_key"; error = "La clave de la API no es válida"; }

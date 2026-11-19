@@ -104,9 +104,10 @@ export function themeWords(cmds, theme) {
   return [...w];
 }
 
-// Completa `cards` (Map clave -> {c,q}) hasta 99 con cuotas de ramp/robo/interacción, tierras y básicas.
+// Completa `cards` (Map clave -> {c,q}) hasta 100 menos los comandantes (99, o 98 con partner/background)
+// con cuotas de ramp/robo/interacción, tierras y básicas.
 export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, theme = "", boosted = new Set() } = {}) {
-  const ci = ciUnion(cmds), words = themeWords(cmds, theme);
+  const ci = ciUnion(cmds), words = themeWords(cmds, theme), size = 100 - cmds.length;
   const gcMax = bracket <= 2 ? 0 : bracket === 3 ? 3 : 99;
   let gcCount = [...cards.values()].filter(e => e.c.gc).length;
   const cmdKeys = new Set(cmds.map(key));
@@ -125,8 +126,8 @@ export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, t
   }
   for (const c of list) { if (count(x => !isLand(x)) >= 63) break; if (!isLand(c) && ok(c)) take(c); }
   const nb = ci.length <= 1 ? 7 : ci.length === 2 ? 13 : 17;
-  for (const c of list) { if (count(x => isLand(x) && !isBasic(x)) >= nb || total() >= 99) break; if (isLand(c) && ok(c)) take(c); }
-  const need = 99 - total();
+  for (const c of list) { if (count(x => isLand(x) && !isBasic(x)) >= nb || total() >= size) break; if (isLand(c) && ok(c)) take(c); }
+  const need = size - total();
   if (need > 0) {
     const cols = ci ? [...ci] : ["C"], pips = {}; cols.forEach(c => pips[c] = 1);
     for (const { c, q } of cards.values()) for (const m of (c.cost.match(/\{[^}]+\}/g) || [])) for (const ch of cols) if (m.includes(ch)) pips[ch] += q;
@@ -136,7 +137,7 @@ export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, t
       const b = basics[col]; if (b && n > 0) { const e = cards.get(key(b)); cards.set(key(b), { c: b, q: (e ? e.q : 0) + n }); }
     });
   }
-  while (total() > 99) {
+  while (total() > size) {
     const worst = [...cards.values()].filter(e => !isLand(e.c)).sort((a, b) => b.c.rank - a.c.rank)[0];
     if (!worst) break; cards.delete(key(worst.c));
   }

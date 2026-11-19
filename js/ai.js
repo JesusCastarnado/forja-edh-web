@@ -3,7 +3,9 @@ const ENDPOINT = "/api/claude";
 let statusPromise = null;
 
 export function aiStatus() {
-  if (!statusPromise) statusPromise = fetch(ENDPOINT).then(r => r.ok ? r.json() : { ok: false }).catch(() => ({ ok: false }));
+  if (!statusPromise) statusPromise = fetch(ENDPOINT).then(r => r.ok ? r.json() : { ok: false }).catch(() => ({ ok: false }))
+    // Solo se recuerda si la IA está lista; si no, se vuelve a preguntar (p. ej. arrancaste el servidor o iniciaste sesión después).
+    .then(st => { if (!st.ok || !st.configured) statusPromise = null; return st; });
   return statusPromise;
 }
 

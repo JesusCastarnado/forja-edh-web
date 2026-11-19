@@ -232,7 +232,7 @@ document.querySelectorAll("[data-mode]").forEach(x => x.setAttribute("aria-press
 /* ---------- novedades ---------- */
 let newsCI = null;
 async function renderNews(ci) {
-  if (!deck.cmds.length) { $("#news").innerHTML = '<p class="muted small">Elige un comandante para ver las cartas nuevas en sus colores.</p>'; $("#newsLink").hidden = true; return; }
+  if (!deck.cmds.length) { newsCI = null; $("#news").innerHTML = '<p class="muted small">Elige un comandante para ver las cartas nuevas en sus colores.</p>'; $("#newsLink").hidden = true; return; }
   if (newsCI === ci) return; newsCI = ci;
   const q = `${SF.ciQuery(ci)} date>=${SF.isoDaysAgo(150)} -t:basic game:paper`;
   $("#newsLink").href = SF.searchURL(q); $("#newsLink").hidden = false;
@@ -358,7 +358,9 @@ async function renderOpt(r, s, styleName) {
   await SF.collection([...cutsRaw, ...addsRaw].map(x => String(x.carta || "")), { fuzzyLimit: 10 }).catch(() => {});
   const cuts = cutsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) })).filter(x => x.c && deck.cards.has(A.key(x.c)));
   const adds = addsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) }));
-  const okAdds = adds.filter(x => x.c && x.c.legal && !deck.cards.has(A.key(x.c)) && (!deck.cmds.length || A.subsetCI(x.c.ci, s.ci)));
+  const seenAdd = new Set(); // si la IA repite una carta, solo se ofrece una vez (Commander es singleton)
+  const okAdds = adds.filter(x => x.c && x.c.legal && !deck.cards.has(A.key(x.c)) && (!deck.cmds.length || A.subsetCI(x.c.ci, s.ci))
+    && !seenAdd.has(A.key(x.c)) && seenAdd.add(A.key(x.c)));
   const dropped = adds.length - okAdds.length;
   out.innerHTML = `${styleName ? `<div class="eyebrow">Estilo: ${esc(styleName)}</div>` : ""}<p style="margin:0">${esc(r.resumen)}</p>
     <div class="sugg"><div><div class="eyebrow">Cortar</div>${cuts.map(x => sugHTML(x, "cut")).join("") || '<p class="muted">Sin cortes.</p>'}</div>
@@ -488,7 +490,7 @@ ${await newsBrief(ci)}
 Esqueleto: 36-37 tierras en total, unas 10 piezas de ramp, 10 de robo, 8-10 de interacción y 2-3 barridos, más sinergia y formas de ganar.
 Responde SOLO con JSON con esta forma exacta:
 {"nombre":"nombre corto del mazo","estrategia":"2-3 frases","cartas":["Sol Ring","Command Tower","..."],"basicas":{"Forest":10}}
-"cartas" son las cartas no básicas, cada una una sola vez, con el nombre oficial en inglés, sin el comandante. "basicas" son las tierras básicas y cuántas de cada una. cartas + basicas deben sumar exactamente 99. Todas legales en Commander y dentro de la identidad de color.`;
+"cartas" son las cartas no básicas, cada una una sola vez, con el nombre oficial en inglés, sin el comandante. "basicas" son las tierras básicas y cuántas de cada una. cartas + basicas deben sumar exactamente ${100 - o.cmds.length}. Todas legales en Commander y dentro de la identidad de color.`;
   try {
     const r = await AI.askJSON(prompt, { signal: ctl.signal, effort: "medium", onText: ({ text }) => { const m = st.querySelector(".msg"); const n = (text.match(/",/g) || []).length; if (m && n > 2) m.textContent = `Escribiendo la lista… (${n} cartas)`; } });
     st.querySelector(".msg") && (st.querySelector(".msg").textContent = "Comprobando las cartas en Scryfall…");
@@ -506,7 +508,7 @@ Responde SOLO con JSON con esta forma exacta:
     await autoFill(o, cards, st);
     const after = [...cards.values()].reduce((a, e) => a + e.q, 0);
     st.innerHTML = "";
-    loadBuilt(o.cmds, cards, `<p style="margin:0"><strong class="grade" style="font-family:var(--f-display);font-weight:400;font-size:18px">${esc(r.nombre || "Mazo generado")}</strong></p><p style="margin:4px 0 0">${esc(r.estrategia)}</p>${rejected.length || after !== before ? `<p class="muted small" style="margin:6px 0 0">${rejected.length ? `Descartadas ${rejected.length} cartas no válidas (${rejected.slice(0, 6).map(esc).join(", ")}${rejected.length > 6 ? "…" : ""}). ` : ""}${after > before ? `Completado con ${after - before} cartas automáticas para llegar a 99.` : ""}</p>` : ""}`);
+    loadBuilt(o.cmds, cards, `<p style="margin:0"><strong class="grade" style="font-family:var(--f-display);font-weight:400;font-size:18px">${esc(r.nombre || "Mazo generado")}</strong></p><p style="margin:4px 0 0">${esc(r.estrategia)}</p>${rejected.length || after !== before ? `<p class="muted small" style="margin:6px 0 0">${rejected.length ? `Descartadas ${rejected.length} cartas no válidas (${rejected.slice(0, 6).map(esc).join(", ")}${rejected.length > 6 ? "…" : ""}). ` : ""}${after > before ? `Completado con ${after - before} cartas automáticas para llegar a ${100 - o.cmds.length}.` : ""}</p>` : ""}`);
   } catch (e) { st.innerHTML = e && e.code === "cancelled" ? '<span class="muted">Generación detenida.</span>' : `<span class="no">${esc(AI.errMsg(e))}</span>`; }
   finally { btn.disabled = false; }
 };

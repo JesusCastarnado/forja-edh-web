@@ -9,6 +9,8 @@ param([int]$Port = 8080, [switch]$Login, [string]$ClaudePath = "", [switch]$NoBr
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+# Con la barra final, "forja-edh-web-copia" ya no pasa por dentro de "forja-edh-web".
+$rootDir = $root.TrimEnd('\') + '\'
 
 function Find-Claude {
   if ($ClaudePath -and (Test-Path $ClaudePath)) { return $ClaudePath }
@@ -68,7 +70,19 @@ function Invoke-Claude($ctx) {
     $p.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
     $p.StandardInput.Close()
     $finished = $false
-    while ($null -ne ($line = $p.StandardOutput.ReadLine())) {
+    # Límite de 5 minutos por petición (como maxDuration en Vercel): si Claude se cuelga, no bloquea el servidor.
+    $deadline = [DateTime]::UtcNow.AddMinutes(5)
+    while ($true) {
+      $task = $p.StandardOutput.ReadLineAsync()
+      $left = [int][Math]::Max(0, ($deadline - [DateTime]::UtcNow).TotalMilliseconds)
+      if (-not $task.Wait($left)) {
+        if (-not $p.HasExited) { try { $p.Kill() } catch {} }
+        Send-Json $res @{ error = 'Claude ha tardado demasiado en responder'; code = 'upstream' }
+        $finished = $true
+        break
+      }
+      $line = $task.Result
+      if ($null -eq $line) { break }
       if (-not $line.StartsWith('{')) { continue }
       try { $j = $line | ConvertFrom-Json } catch { continue }
       if ($j.type -eq 'stream_event' -and $j.event.type -eq 'content_block_delta' -and $j.event.delta.type -eq 'text_delta') {
@@ -116,12 +130,18 @@ while ($l.IsListening) {
         $ctx.Response.ContentType = 'application/json'
         Send-Json $ctx.Response @{ ok = $true; mode = 'local'; configured = (Test-ClaudeLogin); found = [bool]$claude; password = $false }
       } elseif ($ctx.Request.HttpMethod -eq 'POST' -and $claude) {
-        Invoke-Claude $ctx
+        # Solo la propia web puede usar la IA: cualquier otra página que visites podría enviar
+        # peticiones a localhost y gastar tu cuenta de Claude.
+        $origin = $ctx.Request.Headers['Origin']
+        if (($origin -and $origin -ne "http://localhost:$Port") -or $ctx.Request.ContentType -notlike 'application/json*') {
+          $ctx.Response.StatusCode = 403
+          Send-Json $ctx.Response @{ error = 'Origen no permitido'; code = 'forbidden' }
+        } else { Invoke-Claude $ctx }
       } else { $ctx.Response.StatusCode = 404 }
     } else {
       if ($path -eq '') { $path = 'index.html' }
       $file = [IO.Path]::GetFullPath((Join-Path $root $path))
-      if ($file.StartsWith($root) -and (Test-Path $file -PathType Leaf) -and -not $path.StartsWith('api/') -and -not $path.StartsWith('.')) {
+      if ($file.StartsWith($rootDir, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path $file -PathType Leaf) -and -not $path.StartsWith('api/') -and -not $path.StartsWith('.')) {
         $bytes = [IO.File]::ReadAllBytes($file)
         $ext = [IO.Path]::GetExtension($file).ToLower()
         $ctx.Response.ContentType = if ($types[$ext]) { $types[$ext] } else { 'application/octet-stream' }

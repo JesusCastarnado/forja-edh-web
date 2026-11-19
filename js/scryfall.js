@@ -59,7 +59,8 @@ export function toCard(o) {
   const c = {
     name: o.name, cost: o.mana_cost || f0.mana_cost || "", cmc: o.cmc || 0, type, sub,
     ci: (o.color_identity || []).join(""), rank: o.edhrec_rank || 99999,
-    price: parseFloat(p.usd || p.usd_foil || p.eur || "0") || 0,
+    // Solo dólares: la web muestra los precios en $ y mezclar euros falseaba el total.
+    price: parseFloat(p.usd || p.usd_foil || "0") || 0,
     text, img: img.normal || "", small: img.small || "", art: img.art_crop || "", back: backImg,
     gc: !!o.game_changer, legal: (o.legalities || {}).commander === "legal",
     released: o.released_at || "", set: o.set_name || "", uri: o.scryfall_uri || "",
@@ -117,7 +118,12 @@ export function isoDaysAgo(days) { const d = new Date(Date.now() - days * 864e5)
 const poolCache = new Map();
 // Las ~700 cartas más jugadas en una identidad de color (para el generador y las sugerencias rápidas).
 export function poolFor(ci) {
-  if (!poolCache.has(ci)) poolCache.set(ci, search(`${ciQuery(ci)} legal:commander -t:basic game:paper`, { pages: 4 }));
+  if (!poolCache.has(ci)) {
+    const p = search(`${ciQuery(ci)} legal:commander -t:basic game:paper`, { pages: 4 });
+    // Si falla, se olvida para que el siguiente intento vuelva a consultar Scryfall.
+    p.catch(() => { if (poolCache.get(ci) === p) poolCache.delete(ci); });
+    poolCache.set(ci, p);
+  }
   return poolCache.get(ci);
 }
 const newsCache = new Map();
