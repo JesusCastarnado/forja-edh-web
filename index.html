@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Forja EDH</title>
+<meta name="description" content="Analiza, optimiza y genera mazos de Commander de Magic con IA. Cartas e imágenes al día desde Scryfall.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://api.scryfall.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="top wrap">
+  <div class="brand"><h1>Forja <span>EDH</span></h1><small>Constructor y analizador de mazos de Commander</small></div>
+  <div class="row">
+    <nav class="tabs" aria-label="Secciones">
+      <a href="#analizar" data-view="analizar">Analizar</a>
+      <a href="#construir" data-view="construir">Construir</a>
+      <a href="#mano" data-view="mano">Probar mano</a>
+    </nav>
+    <button class="btn sm" id="btnPass" hidden>Clave IA</button>
+  </div>
+</header>
+
+<main class="wrap">
+<!-- ===================== ANALIZAR ===================== -->
+<section id="view-analizar">
+  <div class="hero">
+    <h2>Tu mazo, leído carta a carta.</h2>
+    <p>Pega tu lista de Moxfield, Archidekt, ManaBox o cualquier texto «1 Nombre». Buscamos cada carta en Scryfall y calculamos curva, categorías y bracket. Después te decimos qué cortar y qué añadir según cómo lo quieras jugar.</p>
+  </div>
+
+  <div class="import panel">
+    <label class="f" for="deckText">Lista del mazo (nombres en inglés)
+      <textarea id="deckText" spellcheck="false" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;..."></textarea>
+    </label>
+    <div class="side">
+      <div class="ac"><label class="f" for="cmd1">Comandante
+        <input type="text" id="cmd1" autocomplete="off" placeholder="Busca un comandante"></label></div>
+      <div class="ac"><label class="f" for="cmd2">Segundo comandante (partner, opcional)
+        <input type="text" id="cmd2" autocomplete="off" placeholder="—"></label></div>
+      <div class="row">
+        <button class="btn primary" id="btnAnalyze">Analizar mazo</button>
+        <button class="btn" id="btnCopy">Copiar lista</button>
+      </div>
+      <div class="status" id="loadStatus"></div>
+      <p class="muted small">Si la lista trae una sección «Commander» o la marca *CMDR*, el comandante se detecta solo. Sideboard y maybeboard se ignoran.</p>
+    </div>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="work">
+    <div class="stack">
+      <div class="panel">
+        <div class="row between" style="margin-bottom:8px">
+          <h3 style="margin:0">Lista</h3>
+          <div class="row">
+            <div class="seg" role="group" aria-label="Vista de la lista">
+              <button class="btn sm" data-mode="list" aria-pressed="true">Lista</button>
+              <button class="btn sm" data-mode="visual" aria-pressed="false">Visual</button>
+            </div>
+            <div class="ac" style="width:min(260px,100%)"><input type="text" id="addCard" autocomplete="off" placeholder="Añadir carta…" aria-label="Añadir carta"></div>
+          </div>
+        </div>
+        <div id="deckList"></div>
+        <p class="muted small" style="margin:8px 0 0">Etiquetas: <span class="tag">R</span> ramp · <span class="tag">D</span> robo · <span class="tag">X</span> removal · <span class="tag">B</span> barrido · <span class="tag">T</span> tutor · <span class="tag">C</span> contrahechizo · <span class="tag gc">GC</span> Game Changer. Pasa el ratón por una carta para verla.</p>
+      </div>
+
+      <div class="panel" id="aiPanel">
+        <h3>Optimizar</h3>
+        <div class="row">
+          <button class="btn primary ai" id="btnOpt">Optimizar con IA</button>
+          <button class="btn ai" id="btnXray">Radiografía del mazo</button>
+          <button class="btn" id="btnQuick">Sugerencias rápidas</button>
+          <label class="f inline" for="optBracket">Bracket objetivo
+            <select id="optBracket"><option value="">Mantener</option><option value="2">B2 Core</option><option value="3">B3 Upgraded</option><option value="4">B4 Optimized</option><option value="5">B5 cEDH</option></select></label>
+        </div>
+        <div class="aiout" id="aiOut"><p class="muted" style="margin:0">«Optimizar con IA» lee primero cómo está montado el mazo y qué pide el comandante. Luego te pregunta cómo quieres jugarlo y propone cortes y añadidos para ese estilo, teniendo en cuenta también las cartas nuevas.</p></div>
+        <p class="muted small" id="aiNote" style="margin:10px 0 0"></p>
+      </div>
+
+      <div class="panel">
+        <div class="row between"><h3 style="margin:0">Novedades para tu mazo</h3><a class="small" id="newsLink" target="_blank" rel="noopener">Ver todas en Scryfall</a></div>
+        <p class="muted small" style="margin:4px 0 10px">Cartas de los últimos 5 meses dentro de tu identidad de color, incluidas las previews.</p>
+        <div class="grid-cards" id="news"></div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="panel"><h3>Curva de maná</h3><div class="curve" id="curve"></div><p class="muted mono small" style="margin:6px 0 0" id="curveNote"></p></div>
+      <div class="panel"><h3>Esqueleto</h3><div id="meters"></div><p class="muted small" style="margin:6px 0 0">La línea marca la cifra recomendada para un mazo de 100 cartas.</p></div>
+      <div class="panel"><h3>Tipos y colores</h3><div class="kv" id="types"></div><div style="margin-top:12px" id="colors"></div></div>
+      <div class="panel"><h3>Mano inicial</h3><div id="handOdds"></div></div>
+      <div class="panel"><h3>Avisos</h3><ul class="issues" id="issues"></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== CONSTRUIR ===================== -->
+<section id="view-construir" hidden>
+  <div class="hero">
+    <h2>Empieza por el comandante.</h2>
+    <p>Elige comandante, tema y nivel de poder. La IA arma las 99 teniendo en cuenta las cartas nuevas, y nosotros comprobamos identidad de color, legalidad y el esqueleto de tierras, ramp, robo e interacción.</p>
+  </div>
+  <div class="build">
+    <div class="panel form">
+      <div class="ac"><label class="f" for="bCmd">Comandante
+        <input type="text" id="bCmd" autocomplete="off" placeholder="Ej.: Edgar Markov"></label></div>
+      <div class="ac"><label class="f" for="bCmd2">Partner o fondo (opcional)
+        <input type="text" id="bCmd2" autocomplete="off" placeholder="—"></label></div>
+      <label class="f" for="bTheme">Tema o estrategia (opcional)
+        <input type="text" id="bTheme" placeholder="Ej.: fichas y aristócratas, voltron, tierras…"></label>
+      <div class="two">
+        <label class="f" for="bBracket">Bracket
+          <select id="bBracket"><option value="2">B2 · Core (precon)</option><option value="3" selected>B3 · Upgraded</option><option value="4">B4 · Optimized</option><option value="5">B5 · cEDH</option></select></label>
+        <label class="f" for="bBudget">Presupuesto por carta
+          <select id="bBudget"><option value="0">Sin límite</option><option value="5">Hasta 5 $</option><option value="1.5">Hasta 1,5 $</option></select></label>
+      </div>
+      <div class="row">
+        <button class="btn primary ai" id="btnGenAI">Que la IA lo genere</button>
+        <button class="btn" id="btnGenAuto">Generar automático</button>
+      </div>
+      <div class="status" id="genStatus"></div>
+    </div>
+    <div class="panel" id="cmdPreview"></div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <h3>Comandantes nuevos</h3>
+    <p class="muted small" style="margin:0 0 10px">Aparecidos en los últimos 4 meses, previews incluidas. Pulsa uno para construir con él.</p>
+    <div class="grid-cards" id="newCmds"></div>
+  </div>
+</section>
+
+<!-- ===================== MANO ===================== -->
+<section id="view-mano" hidden>
+  <div class="hero">
+    <h2>Roba siete.</h2>
+    <p>Prueba manos iniciales con la regla de mulligan de Commander: el primero es gratis y después devuelves cartas al fondo.</p>
+  </div>
+  <div class="panel">
+    <div class="row">
+      <button class="btn primary" id="btnNewHand">Nueva mano</button>
+      <button class="btn" id="btnMull">Mulligan</button>
+      <button class="btn" id="btnDraw">Robar carta</button>
+      <span class="muted" id="handInfo"></span>
+    </div>
+    <div class="hand" id="hand"></div>
+  </div>
+</section>
+
+<footer>Datos e imágenes de cartas de <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>, con el ranking de popularidad de EDHREC y precios en USD. Proyecto no oficial; Magic: The Gathering y sus imágenes son de Wizards of the Coast.</footer>
+</main>
+
+<img id="peek" alt="" hidden>
+<div id="zoom" class="zoom" hidden role="dialog" aria-modal="true" aria-label="Carta"></div>
+<dialog id="passDlg">
+  <form method="dialog" class="form">
+    <h3 style="margin:0">Clave de la IA</h3>
+    <p class="muted small" style="margin:0">Este servidor pide una contraseña para usar la IA, y así nadie más gasta tu API.</p>
+    <input type="text" id="passInput" autocomplete="off" aria-label="Contraseña">
+    <div class="row"><button class="btn primary" value="ok">Guardar</button><button class="btn" value="cancel">Cancelar</button></div>
+  </form>
+</dialog>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

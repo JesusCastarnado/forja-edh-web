@@ -1,0 +1,9 @@
+{
+  "name": "forja-edh",
+  "private": true,
+  "type": "module",
+  "description": "Constructor y analizador de mazos de Commander con Scryfall y Claude",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0"
+  }
+}
