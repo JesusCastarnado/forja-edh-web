@@ -1,7 +1,7 @@
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
-import { initGuided, showGuided } from "./guided.js";
+import { initGuided, showGuided, editInGuided } from "./guided.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
@@ -265,6 +265,10 @@ $("#btnCopy").onclick = async () => {
   const t = A.deckToText(deck);
   try { await navigator.clipboard.writeText(t); toast("Lista copiada"); }
   catch { const ta = $("#deckText"); ta.value = t; ta.focus(); ta.select(); toast("Selecciona y copia el texto"); }
+};
+$("#btnEditGuided").onclick = () => {
+  if (!deck.cmds.length) { toast("Elige un comandante y pulsa «Analizar mazo» primero"); return; }
+  editInGuided(deck.cmds, deck.cards);
 };
 attachAC($("#cmd1"), { query: cmdQuery });
 attachAC($("#cmd2"), { query: cmdQuery });

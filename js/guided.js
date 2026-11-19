@@ -349,6 +349,22 @@ export function initGuided(helpers) {
   $("#view-guiado").addEventListener("click", e => { const b = e.target.closest("[data-gact]"); if (b) onAction(b.dataset.gact); });
 }
 
+// Abre un mazo ya hecho (por ejemplo, el de «Analizar») en el constructor para seguir editándolo.
+export function editInGuided(cmds, cards) {
+  let draft = st.cmds.length ? { cmds: st.cmds.map(c => c.name), n: total() } : null;
+  if (!booted) { try { const s = JSON.parse(localStorage.getItem(SAVE) || "null"); if (s && Array.isArray(s.cmds) && s.cmds.length) draft = { cmds: s.cmds, n: (s.cards || []).length }; } catch {} }
+  // Solo preguntamos si hay otro mazo a medias (con otro comandante); si es el mismo, se actualiza sin más.
+  const same = draft && draft.cmds.join("|") === cmds.map(c => c.name).join("|");
+  if (draft && draft.n && !same && !confirm(`Tienes a medias un mazo de ${draft.cmds.join(" + ")} en «Paso a paso». ¿Reemplazarlo por este?`)) return false;
+  st.cmds = cmds.slice(); st.cards = new Map([...cards].map(([k, v]) => [k, { ...v }])); st.mode = "guided";
+  const n = counts(), t = targets();
+  st.step = Math.max(0, STEPS.findIndex(s => n[s.k] < t[s.k]));
+  save();
+  if (booted) startBuild();
+  location.hash = "guiado";
+  return true;
+}
+
 export async function showGuided() {
   if (booted) return; booted = true;
   renderArch(); renderColors(); loadCmds();
