@@ -93,9 +93,14 @@ function Invoke-Claude($ctx) {
 }
 
 $types = @{ '.html' = 'text/html; charset=utf-8'; '.js' = 'text/javascript; charset=utf-8'; '.css' = 'text/css; charset=utf-8'; '.json' = 'application/json'; '.svg' = 'image/svg+xml'; '.png' = 'image/png'; '.ico' = 'image/x-icon' }
-$l = New-Object System.Net.HttpListener
-$l.Prefixes.Add("http://localhost:$Port/")
-$l.Start()
+# Si el puerto está ocupado (otro servidor abierto, otro programa), prueba los siguientes.
+$l = $null
+foreach ($try in $Port..($Port + 20)) {
+  $cand = New-Object System.Net.HttpListener
+  $cand.Prefixes.Add("http://localhost:$try/")
+  try { $cand.Start(); $l = $cand; $Port = $try; break } catch { $cand.Close() }
+}
+if (-not $l) { Write-Output "No hay ningún puerto libre entre $Port y $($Port + 20). Cierra otros servidores o usa -Port."; exit 1 }
 Write-Output "Forja EDH en http://localhost:$Port/  (Ctrl+C para parar)"
 if (-not $claude) { Write-Output "IA: no encuentro claude.exe; la web funcionará sin IA." }
 elseif (Test-ClaudeLogin) { Write-Output "IA: usando tu cuenta de Claude ($claude)" }
