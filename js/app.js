@@ -366,8 +366,9 @@ function renderCloud(s = Cloud.state()) {
   box.hidden = false;
   if (!s.user) {
     const typed = $("#cloudEmail") ? $("#cloudEmail").value : "", note = $("#cloudStatus") ? $("#cloudStatus").innerHTML : "";
-    box.innerHTML = `<div class="dcl"><div><b>Guarda tus mazos en la nube</b><p class="muted small">Entra con tu email y tus mazos se sincronizan entre tus dispositivos y entre la versión local y la publicada. Sin contraseña: te llega un enlace para entrar.</p></div>
-      <form class="row" id="cloudForm"><input type="email" id="cloudEmail" required autocomplete="email" placeholder="tu@email.com" aria-label="Tu email" style="width:min(260px,100%)"><button class="btn primary sm" ${s.ready ? "" : "disabled"}>${s.ready ? "Enviar enlace" : "Conectando…"}</button></form></div>
+    box.innerHTML = `<div class="dcl"><div><b>Guarda tus mazos en la nube</b><p class="muted small">Entra y tus mazos se sincronizan entre tus dispositivos y entre la versión local y la publicada. Con GitHub entras al momento; con el email te llega un enlace (sin contraseña).</p></div>
+      <div class="dlogin"><button type="button" class="btn primary sm" data-cloud="github" ${s.ready ? "" : "disabled"}>${s.ready ? "Entrar con GitHub" : "Conectando…"}</button>
+      <form class="row" id="cloudForm"><input type="email" id="cloudEmail" required autocomplete="email" placeholder="o con tu email" aria-label="Tu email" style="width:min(220px,100%)"><button class="btn sm" ${s.ready ? "" : "disabled"}>Enviar enlace</button></form></div></div>
       <div class="status" id="cloudStatus">${note || (s.error ? `<span class="no">${esc(s.error)}</span>` : "")}</div>`;
     $("#cloudEmail").value = typed;
   } else {
@@ -388,7 +389,11 @@ $("#cloudBox").addEventListener("submit", async e => {
 });
 $("#cloudBox").addEventListener("click", async e => {
   const b = e.target.closest("[data-cloud]"); if (!b) return;
-  if (b.dataset.cloud === "sync") Cloud.sync();
+  if (b.dataset.cloud === "github") {
+    b.disabled = true;
+    try { await Cloud.signInWithGitHub(); }
+    catch (err) { b.disabled = false; $("#cloudStatus").innerHTML = `<span class="no">No se pudo entrar con GitHub: ${esc(err.message || err)}</span>`; }
+  } else if (b.dataset.cloud === "sync") Cloud.sync();
   else if (b.dataset.cloud === "out" && confirm("¿Cerrar sesión? Los mazos se quedan en este navegador, pero dejarán de sincronizarse.")) Cloud.signOut();
 });
 Cloud.onState(s => {

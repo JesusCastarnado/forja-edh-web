@@ -54,6 +54,12 @@ export async function signIn(email) {
   const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
   if (error) throw error;
 }
+// Entrar con GitHub: sin correo de por medio (el plan gratis de Supabase solo envía 2 correos por hora).
+export async function signInWithGitHub() {
+  if (!client) throw new Error("La nube no está disponible");
+  const { error } = await client.auth.signInWithOAuth({ provider: "github", options: { redirectTo: location.origin + location.pathname } });
+  if (error) throw error; // si va bien, el navegador se va a GitHub y vuelve con la sesión
+}
 export async function signOut() {
   if (client) await client.auth.signOut();
   user = null; lastSync = 0; emit();
