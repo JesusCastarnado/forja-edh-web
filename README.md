@@ -9,6 +9,8 @@ Constructor y analizador de mazos de Commander. Las cartas, imágenes, precios y
 - **Radiografía**: plan de juego, mulligan, debilidades y combos.
 - **Novedades para tu mazo**: cartas de los últimos 5 meses en tus colores, previews incluidas.
 - **Construir**: genera las 99 con IA o de forma automática (las más jugadas según EDHREC con cuotas de ramp, robo e interacción). Muestra los comandantes nuevos.
+- **Paso a paso**: eliges comandante y montas el mazo por categorías (aceleración, robo, removal, barridos, protección, recursión, tutores, plan y tierras) con sugerencias en tus colores. También abre mazos ya hechos para editarlos.
+- **Mis mazos**: guarda tus mazos (pegando la lista, importando .txt o desde Analizar / Paso a paso). Se guardan en el navegador y, si configuras la nube, se sincronizan con tu cuenta.
 - **Probar mano**: robo de 7, mulligan de Commander y robar carta, con las imágenes reales.
 
 ## Estructura
@@ -20,9 +22,30 @@ js/scryfall.js    acceso a la API de Scryfall, con pausa entre peticiones
 js/analysis.js    lectura de listas, estadísticas y generador automático
 js/ai.js          cliente de /api/claude (streaming)
 js/app.js         interfaz
+js/guided.js      constructor «Paso a paso»
+js/decks.js       «Mis mazos» en el navegador (localStorage)
+js/cloud.js       sincronización de «Mis mazos» con Supabase
+js/config.js      URL y clave pública de Supabase (vacías = sin nube)
+supabase/schema.sql  tabla y reglas de seguridad de la nube
 api/claude.js     función de Vercel que llama a Claude con el SDK oficial (web publicada)
 dev/serve.ps1     servidor local: sirve la web y hace de /api/claude con Claude Code y tu cuenta
 ```
+
+## Guardar los mazos en la nube (gratis, opcional)
+
+Sin configurar nada, «Mis mazos» se guarda solo en el navegador. Con [Supabase](https://supabase.com) (plan gratuito) entras con tu email y los mazos se sincronizan entre dispositivos y entre la versión local y la publicada.
+
+1. Crea una cuenta en https://supabase.com y un proyecto nuevo (plan **Free**; la región más cercana, p. ej. Frankfurt o París).
+2. En el proyecto: **SQL Editor → New query**, pega el contenido de `supabase/schema.sql` y pulsa **Run**.
+3. **Authentication → URL Configuration**:
+   - **Site URL**: la dirección de tu web en Vercel (o `http://localhost:8080` si solo la usas en local).
+   - **Redirect URLs**: añade `http://localhost:8080/**` y `https://TU-WEB.vercel.app/**`.
+4. **Project Settings → API** (o **Data API**): copia la **Project URL** y la clave **anon public** (o **publishable**) en `js/config.js`. Son públicas por diseño: las reglas de `schema.sql` hacen que cada usuario solo vea sus mazos. **No uses nunca la clave `service_role` / `secret`.**
+5. Sube el cambio (`git push`). En «Mis mazos» aparece la caja para entrar con tu email: te llega un enlace y, al abrirlo **en el mismo navegador**, quedas dentro.
+
+Límites del plan gratuito: el correo de inicio de sesión que envía Supabase tiene un tope bajo de envíos por hora (de sobra para uso personal) y el proyecto se pausa si pasa una semana sin uso; los datos no se pierden, se reactiva desde el panel de Supabase.
+
+Cómo sincroniza: al entrar, al guardar o borrar un mazo y al volver a la pestaña. Por cada mazo gana la versión modificada más recientemente; los borrados también se sincronizan. Los mazos que ya tenías en el navegador se suben al entrar por primera vez.
 
 ## Usarla en local, con la IA de tu cuenta de Claude
 

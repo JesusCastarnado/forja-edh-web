@@ -278,6 +278,10 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 .gdgroup h4{margin:0 0 4px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;border-bottom:2px solid var(--c);padding-bottom:3px}
 
 /* ---------- Mis mazos ---------- */
+.dcloud{margin-bottom:16px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line));display:grid;gap:8px}
+.dcl{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;justify-content:space-between}
+.dcl p{margin:2px 0 0}
+.dcl input[type=email]{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:0}
 .dpaste{margin-bottom:16px}
 .dpaste .side p{margin:0}
 .dstatus{display:grid;gap:4px;margin-bottom:14px;justify-items:start}

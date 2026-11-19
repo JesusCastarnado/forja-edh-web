@@ -3,6 +3,7 @@ import * as A from "./analysis.js";
 import * as AI from "./ai.js";
 import { initGuided, showGuided, editInGuided } from "./guided.js";
 import * as Decks from "./decks.js";
+import * as Cloud from "./cloud.js";
 
 const { F } = A;
 const $ = s => document.querySelector(s);
@@ -358,6 +359,44 @@ $("#decksExport").onclick = () => {
   a.download = `forja-mis-mazos-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
+// Nube: caja de cuenta en Mis mazos (solo si config.js tiene los datos de Supabase).
+function renderCloud(s = Cloud.state()) {
+  const box = $("#cloudBox");
+  if (!s.configured) { box.hidden = true; return; }
+  box.hidden = false;
+  if (!s.user) {
+    const typed = $("#cloudEmail") ? $("#cloudEmail").value : "", note = $("#cloudStatus") ? $("#cloudStatus").innerHTML : "";
+    box.innerHTML = `<div class="dcl"><div><b>Guarda tus mazos en la nube</b><p class="muted small">Entra con tu email y tus mazos se sincronizan entre tus dispositivos y entre la versión local y la publicada. Sin contraseña: te llega un enlace para entrar.</p></div>
+      <form class="row" id="cloudForm"><input type="email" id="cloudEmail" required autocomplete="email" placeholder="tu@email.com" aria-label="Tu email" style="width:min(260px,100%)"><button class="btn primary sm" ${s.ready ? "" : "disabled"}>${s.ready ? "Enviar enlace" : "Conectando…"}</button></form></div>
+      <div class="status" id="cloudStatus">${note || (s.error ? `<span class="no">${esc(s.error)}</span>` : "")}</div>`;
+    $("#cloudEmail").value = typed;
+  } else {
+    box.innerHTML = `<div class="dcl"><div><b>Mazos sincronizados en la nube</b><p class="muted small">Sesión iniciada como ${esc(s.user.email || "")} · ${s.syncing ? "sincronizando…" : s.lastSync ? "última sincronización " + ago(s.lastSync) : "pendiente de sincronizar"}</p>${s.error ? `<p class="no small">${esc(s.error)}</p>` : ""}</div>
+      <div class="row"><button class="btn sm" data-cloud="sync" ${s.syncing ? "disabled" : ""}>Sincronizar ahora</button><button class="btn sm" data-cloud="out">Cerrar sesión</button></div></div>`;
+  }
+}
+$("#cloudBox").addEventListener("submit", async e => {
+  e.preventDefault();
+  const email = $("#cloudEmail").value.trim(), st = $("#cloudStatus"), btn = e.target.querySelector("button");
+  btn.disabled = true; st.innerHTML = '<span class="spin"></span><span>Enviando…</span>';
+  try {
+    await Cloud.signIn(email);
+    st.innerHTML = `<span class="ok">Te hemos enviado un enlace a ${esc(email)}. Ábrelo en este mismo navegador para entrar (mira también en spam).</span>`;
+  } catch (err) {
+    st.innerHTML = `<span class="no">No se pudo enviar el enlace: ${esc(err.message || err)}</span>`;
+  } finally { btn.disabled = false; }
+});
+$("#cloudBox").addEventListener("click", async e => {
+  const b = e.target.closest("[data-cloud]"); if (!b) return;
+  if (b.dataset.cloud === "sync") Cloud.sync();
+  else if (b.dataset.cloud === "out" && confirm("¿Cerrar sesión? Los mazos se quedan en este navegador, pero dejarán de sincronizarse.")) Cloud.signOut();
+});
+Cloud.onState(s => {
+  renderCloud(s);
+  if (!$("#view-mazos").hidden) renderDecks();
+  renderSavedNote();
+});
+
 const deckNotes = d => [
   ...(d.cmds.length ? [] : ["sin comandante detectado (ábrelo y elígelo en Analizar)"]),
   ...(d.unknown.length ? [`${d.unknown.length} ${d.unknown.length === 1 ? "carta no encontrada" : "cartas no encontradas"} (${d.unknown.slice(0, 5).join(", ")}${d.unknown.length > 5 ? "…" : ""})`] : []),
@@ -716,7 +755,7 @@ function route() {
   if (v === "mano" && !hand.length && deck.cards.size) newGame(false); else if (v === "mano") renderHand();
   if (v === "construir" && !cmdsLoaded) { cmdsLoaded = true; renderNewCommanders(); }
   if (v === "guiado") showGuided();
-  if (v === "mazos") renderDecks();
+  if (v === "mazos") { renderDecks(); renderCloud(); }
 }
 window.addEventListener("hashchange", route);
 
@@ -729,6 +768,7 @@ initGuided({
 /* ---------- arranque ---------- */
 (async function boot() {
   route(); render(); showCmdPreview();
+  Cloud.init(); // si hay sesión, trae los mazos de la nube en segundo plano
   AI.aiStatus().then(st => {
     $("#btnPass").hidden = !(st.ok && st.password);
     if (st.ok && st.mode === "local" && st.configured) $("#aiNote").textContent = "IA en modo local: usa tu cuenta de Claude a través de Claude Code en este ordenador.";

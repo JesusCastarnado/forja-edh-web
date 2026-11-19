@@ -3,15 +3,29 @@
 import * as A from "./analysis.js";
 
 const KEY = "forja-mazos";
+const TOMBS = "forja-mazos-borrados"; // id -> cuándo se borró, para que el borrado llegue a la nube
+
+const listeners = new Set();
+export const onChange = cb => listeners.add(cb);
+const notify = () => listeners.forEach(cb => { try { cb(); } catch {} });
 
 function read() {
   try { const v = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(v) ? v.filter(d => d && d.id && typeof d.text === "string") : []; }
   catch { return []; }
 }
-function write(all) {
-  try { localStorage.setItem(KEY, JSON.stringify(all)); return true; }
+function write(all, quiet = false) {
+  try { localStorage.setItem(KEY, JSON.stringify(all)); }
   catch { return false; } // sin espacio o almacenamiento bloqueado
+  if (!quiet) notify();
+  return true;
 }
+export function tombs() { try { const t = JSON.parse(localStorage.getItem(TOMBS) || "{}"); return t && typeof t === "object" ? t : {}; } catch { return {}; } }
+function addTomb(id) { const t = tombs(); t[id] = Date.now(); try { localStorage.setItem(TOMBS, JSON.stringify(t)); } catch {} }
+export function clearTombs(ids) { const t = tombs(); ids.forEach(id => delete t[id]); try { localStorage.setItem(TOMBS, JSON.stringify(t)); } catch {} }
+
+// Acceso directo para la sincronización: escribe sin avisar, para no provocar otra sincronización.
+export const _all = read;
+export const _save = all => write(all, true);
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 export const list = () => read().sort((a, b) => (b.updated || 0) - (a.updated || 0));
@@ -38,7 +52,7 @@ export function duplicate(id) {
   const copy = { ...d, id: newId(), name: (d.name + " (copia)").slice(0, 80), created: Date.now(), updated: Date.now() };
   all.push(copy); return write(all) ? copy.id : null;
 }
-export function remove(id) { write(read().filter(d => d.id !== id)); }
+export function remove(id) { addTomb(id); write(read().filter(d => d.id !== id)); }
 
 // Copia de seguridad: los mazos viven en este navegador, así que se pueden llevar a otro con un .json.
 export const exportJSON = () => JSON.stringify({ app: "forja-edh", version: 1, decks: read() }, null, 2);
