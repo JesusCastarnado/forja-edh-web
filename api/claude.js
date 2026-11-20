@@ -45,7 +45,10 @@ async function checkAccess(req) {
 }
 
 const client = new Anthropic(); // lee ANTHROPIC_API_KEY del entorno
-const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5-5";
+// Por defecto Haiku 5.5: el más barato (unas 40 veces menos que Opus). CLAUDE_MODEL en Vercel lo cambia.
+const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-5-5";
+// Haiku no admite el reintento automático con otro modelo si rechaza la petición.
+const FALLBACK = /haiku/.test(MODEL) ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
 const MAX_PROMPT = 120_000;
 
 const SYSTEM = `Eres un jugador y constructor experto de Magic: The Gathering en formato Commander (EDH).
@@ -84,8 +87,7 @@ export default async function handler(req, res) {
       thinking: { type: "adaptive" },
       output_config: { effort: ["low", "medium", "high"].includes(effort) ? effort : "medium" },
       // Si un clasificador de seguridad rechaza la petición, el servidor reintenta con otro modelo.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      ...FALLBACK,
       system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
     });

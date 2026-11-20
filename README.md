@@ -211,7 +211,7 @@ La IA publicada es **privada**: solo responde a las cuentas que pongas en `ALLOW
 2. En Vercel → tu proyecto → **Settings → Environment Variables** añade:
    - `ANTHROPIC_API_KEY`: la clave.
    - `ALLOWED_EMAILS`: el email con el que entras en «Mis mazos» (lo pone en la caja: «Sesión iniciada como…»). Si hay varios, sepáralos con comas.
-   - `CLAUDE_MODEL` (opcional): por defecto `claude-opus-5-5`. Con `claude-sonnet-5-5` cuesta la mitad.
+   - `CLAUDE_MODEL` (opcional): por defecto `claude-haiku-5-5`, el más barato (0,10 $ / 0,50 $ por millón de tokens de entrada / salida). Si quieres respuestas más finas: `claude-sonnet-5-5` (2 $ / 10 $) o `claude-opus-5-5` (4 $ / 20 $).
 3. **Deployments → ⋯ → Redeploy** en el último despliegue, para que lea las variables.
 4. En la web, entra en «Mis mazos» y usa la IA en Analizar o Construir.
 
