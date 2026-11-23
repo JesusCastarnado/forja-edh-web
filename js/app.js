@@ -1087,24 +1087,8 @@ function mdHTML(t) {
   }
   return h + (inUl ? "</ul>" : "");
 }
-$("#btnXray").onclick = async () => {
-  const out = $("#aiOut"); if (!deck.cards.size) { out.innerHTML = '<p class="lo">Primero analiza un mazo.</p>'; return; }
-  if (!(await aiReady(out))) return;
-  const s = A.analyze(deck), ctl = new AbortController();
-  out.innerHTML = thinking("Preparando la radiografía…") + '<div class="row"><button class="btn sm" id="stopX">Detener</button></div><div class="md" id="xmd"></div>';
-  $("#stopX").onclick = () => ctl.abort();
-  const prompt = `Escribe una radiografía de este mazo de Commander, con estos apartados como títulos "## ": Plan de juego, Cómo se juega (turnos 1-3, medio juego, cierre), Qué buscar en el mulligan, Puntos débiles, Contra qué mesas sufre, Combos y sinergias clave. Usa viñetas cortas y nombra cartas concretas de la lista. Sé directo y práctico, unas 400 palabras.\n\n${deckBrief(s)}`;
-  try {
-    await AI.ask(prompt, { signal: ctl.signal, effort: "low", action: "radiografia", onText: ({ text }) => { out.querySelector(".status")?.remove(); $("#xmd").innerHTML = mdHTML(text); } });
-  } catch (e) {
-    out.querySelector(".status")?.remove();
-    if (e.code !== "cancelled") { if (e.text) $("#xmd").innerHTML = mdHTML(e.text); out.insertAdjacentHTML("afterbegin", `<p class="no">${esc(AI.errMsg(e))}</p>`); }
-  }
-  $("#stopX")?.parentElement.remove();
-};
-
 /* ---------- guía del mazo (IA) ---------- */
-// Una guía para compartir, más completa que la Radiografía. Se puede copiar o guardar con el mazo de
+// Una guía para compartir (sustituye a la antigua «Radiografía»). Se puede copiar o guardar con el mazo de
 // Mis mazos; guardada, se ve también en el enlace compartido.
 let lastGuide = "";
 $("#btnGuide").onclick = async () => {

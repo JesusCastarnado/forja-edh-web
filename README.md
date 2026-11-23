@@ -58,8 +58,7 @@ Pegas la lista de tu mazo (de Moxfield, Archidekt, ManaBox o cualquier texto «1
 Además:
 
 - **Optimizar con IA**: lee cómo está montado el mazo y qué pide el comandante, te deja elegir el estilo (reforzar el actual, otro arquetipo o «a mi manera») y el **presupuesto de la mejora** (lo máximo que quieres gastar sumando las cartas nuevas), y propone cortes y añadidos. Cada añadido muestra su precio y su sinergia; los que se pasan del presupuesto se descartan. Cada añadido se comprueba en Scryfall: que exista, que sea legal y que esté en tu identidad de color.
-- **Radiografía**: plan de juego, cómo se juega cada fase, mulligan, puntos débiles y combos.
-- **Guía del mazo** (IA): una guía para compartir, más completa que la Radiografía: el mazo en una frase, cómo gana, mulligan, primeros turnos, medio juego, cómo cerrar, cartas clave, combos, qué le cuesta y consejos. Puedes **copiarla** o, si el mazo está en Mis mazos, **guardarla con él**: entonces se ve en Mis mazos (botón «Guía»), en Analizar («Ver su guía») y en el **enlace compartido**, para que tus amigos sepan jugarlo. Si cambias el mazo, la guía avisa de que es de una versión anterior.
+- **Guía del mazo** (IA): cómo se juega el mazo, para ti o para compartir (sustituye a la antigua «Radiografía», que hacía casi lo mismo): el mazo en una frase, cómo gana, mulligan, primeros turnos, medio juego, cómo cerrar, cartas clave, combos, qué le cuesta y consejos. Puedes **copiarla** o, si el mazo está en Mis mazos, **guardarla con él**: entonces se ve en Mis mazos (botón «Guía»), en Analizar («Ver su guía») y en el **enlace compartido**, para que tus amigos sepan jugarlo. Si cambias el mazo, la guía avisa de que es de una versión anterior.
 - **Importar por enlace**: pega en el cuadro de la lista el enlace de un mazo público de **Archidekt** y pulsa «Analizar mazo»: se trae solo, con su comandante (sin sideboard ni maybeboard). **Moxfield** no deja leer sus mazos desde otras webs, así que al pegar un enlace suyo te explica cómo copiarlo: en Moxfield, «Export» → «Copy for MTGA», y pegar la lista.
 - **Copiar lista** en el formato que quieras: *para Moxfield / Arena* (secciones Commander y Deck), *para Archidekt* (`1x Carta` con la etiqueta `[Commander]`) o *texto simple* (`*CMDR*` en el comandante).
 - **Sugerencias rápidas** (sin IA): rellena lo que le falta al esqueleto con las cartas más jugadas en tus colores.
@@ -260,7 +259,7 @@ Coste aproximado con Claude Opus 5.5 (4 $ por millón de tokens de entrada y 20 
 |---|---|
 | Diagnóstico de estilo | 0,02–0,05 $ |
 | Mejoras para un estilo | 0,05–0,15 $ |
-| Radiografía | 0,03–0,08 $ |
+| Guía del mazo | 0,02–0,10 $ (con Haiku, céntimos) |
 | Generar un mazo completo | 0,10–0,30 $ |
 
 Si cancelas una respuesta con «Detener», la función corta la llamada para no seguir gastando. La función tiene activado el *fallback* del servidor: si un filtro de seguridad rechazara una petición, la API la reintenta con otro modelo en vez de fallar.

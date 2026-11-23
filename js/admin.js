@@ -6,7 +6,7 @@ import * as Cloud from "./cloud.js";
 const $ = s => document.querySelector(s);
 let H = null; // utilidades de app.js: esc, toast, thinking
 const LIMIT = "forja-admin-limite"; // límite mensual en dólares que pusiste en la consola de Anthropic
-const ACTIONS = { optimizar: "Optimizar", presupuesto: "A presupuesto", radiografia: "Radiografía", generar: "Generar mazo", encaja: "¿Encaja esta carta?", autorrellenar: "Autorrellenar", otro: "Otros" };
+const ACTIONS = { optimizar: "Optimizar", presupuesto: "A presupuesto", radiografia: "Radiografía (antigua)", guia: "Guía del mazo", generar: "Generar mazo", encaja: "¿Encaja esta carta?", autorrellenar: "Autorrellenar", otro: "Otros" };
 let data = { access: [], users: [], usage: [] }, seq = 0;
 
 const usd = v => v < 0.01 && v > 0 ? `${v.toLocaleString("es-ES", { maximumFractionDigits: 4 })} $` : `${v.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
