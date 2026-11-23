@@ -1228,6 +1228,8 @@ function route() {
   const v = h === "comunidad" ? "mazos" : views.includes(h) ? h : "analizar";
   views.forEach(x => { $("#view-" + x).hidden = x !== v; });
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
+  // En el móvil las pestañas se deslizan: deja la actual a la vista.
+  const curTab = document.querySelector(`nav.tabs a[data-view="${v}"]`); if (curTab) curTab.scrollIntoView({ block: "nearest", inline: "center" });
   $("#btnNews").setAttribute("aria-current", v === "novedades" ? "page" : "false");
   if (v === "novedades") renderNewsPage();
   $("#btnAdmin").setAttribute("aria-current", v === "admin" ? "page" : "false");
@@ -1266,6 +1268,21 @@ function renderNewsPage() {
 }
 updateNewsBadge();
 initAdmin({ esc, toast, thinking });
+
+/* ---------- instalar como app ---------- */
+// Android y ordenadores con Chrome/Edge avisan de que se puede instalar; en iPhone/iPad hay que
+// hacerlo desde el botón Compartir de Safari, así que allí el botón explica cómo.
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let installEvt = null;
+if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("/sw.js").catch(() => {});
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("#btnInstall").hidden = false; });
+addEventListener("appinstalled", () => { installEvt = null; $("#btnInstall").hidden = true; toast("Forja EDH instalada"); });
+if (isIOS && !standalone) $("#btnInstall").hidden = false;
+$("#btnInstall").onclick = async () => {
+  if (installEvt) { installEvt.prompt(); const { outcome } = await installEvt.userChoice; installEvt = null; if (outcome === "accepted") $("#btnInstall").hidden = true; return; }
+  if (isIOS) alert(["Para instalar Forja EDH en tu iPhone o iPad:", "", "1. Abre esta web en Safari.", "2. Pulsa el botón Compartir (el cuadrado con la flecha hacia arriba).", "3. Elige «Añadir a pantalla de inicio»."].join(String.fromCharCode(10)));
+};
 
 initShared({ esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck });
 initGoldfish({ esc, toast, getDeck: () => deck });

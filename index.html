@@ -9,6 +9,15 @@
 <link rel="preconnect" href="https://api.scryfall.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/styles.css">
+<!-- Instalable como app en el móvil y el ordenador (manifest.json + sw.js) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1714">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Forja EDH">
 </head>
 <body>
 <header class="top wrap">
@@ -23,6 +32,7 @@
       <a href="#coleccion" data-view="coleccion">Colección</a>
       <a href="#mano" data-view="mano">Probar mano</a>
     </nav>
+    <button class="btn sm primary" id="btnInstall" hidden title="Instalar Forja EDH como app">Instalar app</button>
     <a class="btn sm newsbtn" href="#admin" id="btnAdmin" hidden title="Solo tú ves esto">Admin</a>
     <a class="btn sm newsbtn" href="#novedades" id="btnNews" title="Lo último que se ha añadido">Novedades<span class="nbadge" id="newsBadge" hidden></span></a>
     <select id="currency" class="cursel" aria-label="Moneda de los precios" title="Moneda de los precios"><option value="usd">$ USD</option><option value="eur">€ EUR</option></select>

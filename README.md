@@ -147,6 +147,17 @@ Las cartas que tienes físicamente y tu lista de deseos.
 - Descargar la colección en .txt.
 - Se guarda en el navegador y, si entras con tu cuenta, en la nube (necesita la tabla `collections` de `supabase/schema.sql`).
 
+### Instalar como app en el móvil
+
+Forja EDH se puede instalar como una app más, con su icono y a pantalla completa (sin la barra del navegador):
+
+- **Android (Chrome)** y **ordenador (Chrome o Edge)**: aparece el botón **Instalar app** arriba (o la opción «Instalar» / «Añadir a pantalla de inicio» del menú del navegador).
+- **iPhone / iPad**: abre la web en **Safari**, pulsa **Compartir** (el cuadrado con la flecha) y elige **Añadir a pantalla de inicio**. El botón **Instalar app** de arriba lo explica.
+
+Al mantener pulsado el icono hay accesos directos a Paso a paso, Mis mazos y Probar mano. La app siempre carga la versión más reciente de la web; si no hay conexión, abre la última que se guardó (para buscar cartas sí hace falta internet). En pantallas pequeñas la cabecera es más compacta, las pestañas se deslizan y la mano de Probar mano y las sugerencias de Paso a paso caben mejor.
+
+Por dentro: `manifest.json` (nombre, colores, iconos de `icons/`) y `sw.js` (service worker con estrategia «red primero»).
+
 ### Novedades
 
 El botón **Novedades** de arriba abre la lista de lo último que se ha añadido a la web, agrupado por fecha y con un enlace para ir a probar cada cosa. El botón muestra cuántas novedades no has visto todavía (se recuerda en tu navegador). Se puede enlazar directamente: https://forja-edh-web.vercel.app/#novedades
@@ -321,6 +332,9 @@ js/cloud.js           sincronización de «Mis mazos» y de la colección con Su
 js/shared.js          vista del mazo compartido (#compartido/…) para sugerir cambios
 js/changelog.js       lista de «Novedades» (lo último añadido, para quien visita la web)
 js/admin.js           pantalla Admin (#admin): acceso a la IA y consumo
+manifest.json         datos de la app instalable (nombre, colores, iconos)
+sw.js                 service worker: app instalable y sin conexión (red primero)
+icons/                iconos de la app
 js/config.js          URL y clave publicable de Supabase (vacías = sin nube)
 supabase/schema.sql   tablas (mazos, sugerencias y colección), reglas de seguridad y funciones para compartir y para la comunidad
 api/claude.js         función de Vercel que llama a Claude con el SDK oficial

@@ -1,0 +1,22 @@
+{
+  "name": "Forja EDH",
+  "short_name": "Forja EDH",
+  "description": "Constructor y analizador de mazos de Commander: analiza, construye paso a paso, guarda y comparte tus mazos.",
+  "lang": "es",
+  "start_url": "/#analizar",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1714",
+  "theme_color": "#0f1714",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Paso a paso", "url": "/#guiado", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Mis mazos", "url": "/#mazos", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Probar mano", "url": "/#mano", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
