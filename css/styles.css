@@ -538,3 +538,12 @@ header.top>.row{min-width:0;max-width:100%}
 .adm-table th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .adm-table .r{text-align:right}
 .adm-row b{overflow-wrap:anywhere}
+
+/* ---------- Historial de versiones ---------- */
+.hver{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:6px;background:var(--bg)}
+.hver.cur{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.hdiff{display:flex;flex-wrap:wrap;gap:4px}
+.hchip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.hchip.add{border-color:var(--good);color:var(--good)}
+.hchip.rem{border-color:var(--bad);color:var(--bad);text-decoration:line-through}
+

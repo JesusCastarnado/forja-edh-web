@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 23, fecha: "2026-11-23", titulo: "Historial de versiones de tus mazos", ir: "#mazos",
+    texto: "Cada vez que guardas un mazo con cambios se queda la versión anterior. En Mis mazos, «Historial» te enseña qué cartas entraron y salieron en cada versión, y puedes compararla con la actual o volver a ella si un cambio no te convence." },
   { id: 22, fecha: "2026-11-23", titulo: "Objetivos adaptados a tu comandante", ir: "#guiado",
     texto: "En Paso a paso, las cifras de cada categoría (aceleración, robo, removal…) ya no son las mismas para todos: se calculan con miles de mazos reales de tu comandante en EDHREC. Kinnan pide 21 de aceleración y ningún barrido; un voltron, mucha protección. Con «Usar las generales» vuelves a las de siempre." },
   { id: 21, fecha: "2026-11-23", titulo: "Autorrellenar el mazo", ir: "#guiado",

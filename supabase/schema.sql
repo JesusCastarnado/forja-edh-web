@@ -207,3 +207,7 @@ grant execute on function public.is_admin() to authenticated;
 grant execute on function public.ai_allowed() to authenticated;
 grant execute on function public.log_ai_usage(text, text, int, int, numeric) to authenticated;
 grant execute on function public.admin_users() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Historial de versiones de cada mazo (las últimas 20), sincronizado con el mazo.
+alter table public.decks add column if not exists history jsonb not null default '[]';

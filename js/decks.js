@@ -31,17 +31,46 @@ const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 export const list = () => read().sort((a, b) => (b.updated || 0) - (a.updated || 0));
 export const get = id => read().find(d => d.id === id) || null;
 
+const MAX_VERSIONS = 20;
+// La versión de un mazo que se guarda en su historial (lo justo para verla, compararla y restaurarla).
+const snapshot = d => ({ at: d.updated || Date.now(), name: d.name, cmds: d.cmds || [], text: d.text, stats: d.stats || {}, note: d.note || "" });
+
 // Crea o actualiza un mazo. Devuelve su id, o null si el navegador no deja guardar.
-export function upsert({ id, name, cmds, cards }) {
+// Si la lista cambia, la versión anterior pasa al historial del mazo (las últimas 20).
+// `note`: qué cambió en esta versión («Sugerencias de Pablo», «Autorrelleno»…), opcional.
+export function upsert({ id, name, cmds, cards, note = "" }) {
   const all = read(), s = A.analyze({ cmds, cards }), now = Date.now();
   const d = {
     id: id || newId(), name: String(name || "").trim().slice(0, 80) || cmds.map(c => c.name).join(" + ") || "Mazo sin nombre",
     cmds: cmds.map(c => c.name), text: A.deckToText({ cmds, cards }), updated: now,
     stats: { total: s.total, price: Math.round(s.usd), usd: Math.round(s.usd), eur: Math.round(s.eur), bracket: s.bracket, grade: s.grade, ci: s.ci, art: (cmds[0] && cmds[0].art) || "" },
   };
+  if (note) d.note = String(note).slice(0, 80);
   const i = all.findIndex(x => x.id === d.id);
-  if (i >= 0) { d.created = all[i].created || now; all[i] = d; } else { d.created = now; all.push(d); }
+  if (i >= 0) {
+    const prev = all[i];
+    d.created = prev.created || now;
+    d.history = prev.text !== d.text ? [snapshot(prev), ...(prev.history || [])].slice(0, MAX_VERSIONS) : (prev.history || []);
+    all[i] = d;
+  } else { d.created = now; d.history = []; all.push(d); }
   return write(all) ? d.id : null;
+}
+// Vuelve a una versión anterior. La versión actual pasa al historial, así que también se puede deshacer.
+export function restore(id, index) {
+  const all = read(), d = all.find(x => x.id === id), v = d && (d.history || [])[index];
+  if (!v) return false;
+  const now = Date.now();
+  d.history = [snapshot(d), ...(d.history || [])].slice(0, MAX_VERSIONS);
+  Object.assign(d, { name: v.name, cmds: v.cmds, text: v.text, stats: v.stats, note: `Restaurada la versión del ${new Date(v.at).toLocaleDateString("es-ES")}`, updated: now });
+  return write(all);
+}
+// Diferencias entre dos listas en texto: { added: [{ name, q }], removed: [{ name, q }] }.
+export function diff(oldText, newText) {
+  const count = text => { const m = new Map(), p = A.parseList(text || ""); for (const e of [...p.cmd, ...p.main]) m.set(e.name, (m.get(e.name) || 0) + e.qty); return m; };
+  const a = count(oldText), b = count(newText), added = [], removed = [];
+  for (const [n, q] of b) { const d = q - (a.get(n) || 0); if (d > 0) added.push({ name: n, q: d }); }
+  for (const [n, q] of a) { const d = q - (b.get(n) || 0); if (d > 0) removed.push({ name: n, q: d }); }
+  return { added, removed };
 }
 export function rename(id, name) {
   const all = read(), d = all.find(x => x.id === id); if (!d) return;
@@ -63,7 +92,8 @@ export function importJSON(text) {
   for (const d of incoming) {
     if (!d || typeof d.text !== "string" || !d.text.trim()) continue;
     const clean = { id: String(d.id || newId()), name: String(d.name || "Mazo importado").slice(0, 80), cmds: Array.isArray(d.cmds) ? d.cmds.map(String) : [],
-      text: d.text, created: +d.created || Date.now(), updated: +d.updated || Date.now(), stats: d.stats && typeof d.stats === "object" ? d.stats : {} };
+      text: d.text, created: +d.created || Date.now(), updated: +d.updated || Date.now(), stats: d.stats && typeof d.stats === "object" ? d.stats : {},
+      history: Array.isArray(d.history) ? d.history.filter(v => v && typeof v.text === "string").slice(0, MAX_VERSIONS) : [] };
     const i = all.findIndex(x => x.id === clean.id);
     if (i >= 0) { if ((all[i].updated || 0) >= clean.updated) continue; all[i] = clean; } else all.push(clean);
     n++;

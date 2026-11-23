@@ -111,6 +111,7 @@ Tus mazos guardados, cada uno con el arte del comandante, sus colores, cartas, p
 
 - **Añadir**: «+ Crear mazo» (te lleva a Paso a paso para elegir comandante), «Pegar lista», «Importar archivo» (.txt de Moxfield, Archidekt o ManaBox, varios a la vez, o una copia .json) o guardando desde Analizar / Paso a paso.
 - **En cada mazo**: Abrir, Editar paso a paso, Copiar lista, Renombrar, Duplicar y Borrar.
+- **Historial de versiones**: cada vez que guardas un mazo con cambios en la lista, la versión anterior se guarda en su historial (las últimas 20, también en la nube). El botón **Historial** de cada mazo muestra las versiones con su fecha, qué cartas entraron y salieron en cada una y, si las hay, notas como «Sugerencias de Pablo». Desde cada versión puedes **Comparar con la actual** (abre la pestaña Comparar) o **Restaurarla**; la versión que había pasa al historial, así que también se puede deshacer.
 - **Buscar** por nombre o comandante.
 - **Exportar copia**: descarga todos tus mazos en un .json.
 - **Nube**: entra con GitHub o con tu email y se sincronizan entre dispositivos (ver [Mis mazos y la nube](#mis-mazos-y-la-nube)).

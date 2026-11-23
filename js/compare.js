@@ -11,6 +11,7 @@ export function initCompare(helpers) {
   H = helpers;
   for (const side of ["A", "B"]) {
     $("#cmpPick" + side).addEventListener("change", e => {
+      fixedNames = null;
       const v = e.target.value; if (!v) return;
       const text = v === "@current" ? H.currentText() : (Decks.get(v) || {}).text || "";
       $("#cmpText" + side).value = text;
@@ -36,7 +37,17 @@ export function showCompare() {
   if (!$("#cmpTextA").value.trim() && H.currentText().trim()) { $("#cmpTextA").value = H.currentText(); $("#cmpPickA").value = "@current"; }
 }
 
+let fixedNames = null; // nombres puestos desde fuera (p. ej. el historial: «Versión del 3 nov» / «Actual»)
+// Abre Comparar con dos listas ya puestas y compara. Lo usa el historial de versiones de Mis mazos.
+export function compareTexts(ta, tb, na, nb) {
+  $("#cmpTextA").value = ta; $("#cmpTextB").value = tb; $("#cmpPickA").value = ""; $("#cmpPickB").value = "";
+  fixedNames = { A: na, B: nb };
+  location.hash = "comparar";
+  compare();
+}
+
 const nameOf = side => {
+  if (fixedNames) return fixedNames[side];
   const v = $("#cmpPick" + side).value;
   if (v && v !== "@current") { const d = Decks.get(v); if (d) return d.name; }
   return "Mazo " + side;

@@ -9,7 +9,7 @@ import * as Cloud from "./cloud.js";
 import { initShared, showShared } from "./shared.js";
 import * as Combos from "./combos.js";
 import * as Edh from "./edhrec.js";
-import { initCompare, showCompare } from "./compare.js";
+import { initCompare, showCompare, compareTexts } from "./compare.js";
 import { initGoldfish, showGoldfish } from "./goldfish.js";
 import { initCollection, showCollection, renderColDeck as colDeckHTML, deckMissingCount } from "./colview.js";
 import { money, cardMoney, currency, symbol, setCurrency, currencyName } from "./currency.js";
@@ -388,13 +388,16 @@ function renderSavedNote() {
   $("#btnSaveDeck").textContent = d ? "Guardar cambios" : "Guardar en Mis mazos";
 }
 // Guarda (o actualiza, si ya existe con el mismo comandante) y devuelve el id, o null si se cancela.
+// Nota de la próxima versión que se guarde (p. ej. «Sugerencias de Pablo»), para el historial.
+let pendingNote = "";
 async function saveDeckFlow(cmds, cards, id) {
   if (!cmds.length) { toast("Elige un comandante antes de guardar"); return null; }
   let d = id ? Decks.get(id) : null;
   if (!sameCmds(d, cmds)) d = null; // otro comandante: es otro mazo
   const name = d ? d.name : await askName("Guardar en Mis mazos", cmds.map(c => c.name).join(" + "));
   if (name === null) return null;
-  const nid = Decks.upsert({ id: d && d.id, name, cmds, cards });
+  const nid = Decks.upsert({ id: d && d.id, name, cmds, cards, note: pendingNote });
+  if (nid) pendingNote = "";
   if (!nid) { toast("El navegador no deja guardar (¿ventana privada o sin espacio?)"); return null; }
   toast(d ? `«${d.name}» actualizado` : "Guardado en Mis mazos");
   renderDecks();
@@ -425,7 +428,7 @@ function renderDecks() {
         <div class="small muted">Actualizado ${ago(d.updated)}</div>
         ${nAll ? `<button class="btn sm dsugg${nNew ? " new" : ""}" data-dact="sugg">${nNew ? `${nNew} ${nNew === 1 ? "sugerencia nueva" : "sugerencias nuevas"}` : `${nAll} ${nAll === 1 ? "sugerencia" : "sugerencias"}`}</button>` : ""}
         <div class="row"><button class="btn sm primary" data-dact="open">Abrir</button><button class="btn sm" data-dact="guided">Editar paso a paso</button><button class="btn sm" data-dact="share">Compartir</button>${pub.has(d.id) ? '<button class="btn sm pub" data-dact="pub" title="Está en la comunidad. Pulsa para quitarlo">✓ En la comunidad</button>' : '<button class="btn sm" data-dact="pub" title="Publícalo para que otros jugadores lo vean y te sugieran cambios">Publicar</button>'}</div>
-        <div class="row dminor"><button class="btn sm" data-dact="copy">Copiar lista</button><button class="btn sm" data-dact="rename">Renombrar</button><button class="btn sm" data-dact="dup">Duplicar</button><button class="btn sm danger" data-dact="del">Borrar</button></div>
+        <div class="row dminor"><button class="btn sm" data-dact="copy">Copiar lista</button><button class="btn sm" data-dact="rename">Renombrar</button><button class="btn sm" data-dact="dup">Duplicar</button>${(d.history || []).length ? `<button class="btn sm" data-dact="hist">Historial (${d.history.length})</button>` : ""}<button class="btn sm danger" data-dact="del">Borrar</button></div>
       </div></article>`;
   }).join("") || '<p class="muted">Ningún mazo coincide con la búsqueda.</p>';
 }
@@ -450,6 +453,8 @@ $("#decksList").addEventListener("click", async e => {
   } else if (act === "rename") {
     const name = await askName("Renombrar mazo", d.name);
     if (name) { Decks.rename(id, name); renderDecks(); renderSavedNote(); }
+  } else if (act === "hist") {
+    openHistory(d.id);
   } else if (act === "dup") {
     if (Decks.duplicate(id)) { renderDecks(); toast("Mazo duplicado"); } else toast("El navegador no deja guardar más");
   } else if (act === "del") {
@@ -554,6 +559,43 @@ $("#decksStatus").addEventListener("click", async e => {
   }
 });
 
+/* ---------- historial de versiones ---------- */
+const histDlg = $("#histDlg");
+const vdate = t => new Date(t).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+function openHistory(id) {
+  const d = Decks.get(id); if (!d) return;
+  const versions = [{ at: d.updated, name: d.name, text: d.text, stats: d.stats || {}, note: d.note || "", current: true }, ...(d.history || [])];
+  const chips = (arr, cls) => arr.map(x => `<span class="hchip ${cls}">${cls === "add" ? "+" : "−"}${x.q > 1 ? x.q + " " : ""}${esc(x.name)}</span>`).join("");
+  $("#histBody").innerHTML = `<div class="row between"><h3 style="margin:0">Historial de «${esc(d.name)}»</h3><button class="btn sm" data-hclose>Cerrar</button></div>
+    <p class="muted small" style="margin:0">Cada vez que guardas el mazo con cambios en la lista se guarda la versión anterior (las últimas 20). Restaurar una versión no borra la actual: pasa al historial.</p>
+    ${versions.map((v, i) => {
+      const older = versions[i + 1], df = older ? Decks.diff(older.text, v.text) : null, s = v.stats || {};
+      return `<div class="hver${v.current ? " cur" : ""}">
+        <div class="row between"><div><b>${v.current ? "Versión actual" : "Versión del " + vdate(v.at)}</b>${v.current ? `<span class="muted small"> · guardada el ${vdate(v.at)}</span>` : ""}${v.note ? `<div class="muted small">${esc(v.note)}</div>` : ""}</div>
+          <span class="mono small muted">${s.total ?? "?"}/100 · B${s.bracket ?? "?"}</span></div>
+        ${df ? (df.added.length || df.removed.length ? `<div class="hdiff">${chips(df.removed, "rem")}${chips(df.added, "add")}</div><div class="muted small">Respecto a la versión anterior: ${df.removed.length} fuera, ${df.added.length} dentro.</div>` : '<div class="muted small">Misma lista que la versión anterior (solo cambió el nombre).</div>') : '<div class="muted small">La primera versión guardada.</div>'}
+        ${v.current ? "" : `<div class="row"><button class="btn sm" data-hcmp="${i - 1}">Comparar con la actual</button><button class="btn sm primary" data-hrestore="${i - 1}">Restaurar esta versión</button></div>`}
+      </div>`;
+    }).join("")}`;
+  histDlg.dataset.deck = id;
+  histDlg.showModal();
+}
+histDlg.addEventListener("click", e => {
+  if (e.target === histDlg || e.target.closest("[data-hclose]")) { histDlg.close(); return; }
+  const id = histDlg.dataset.deck, d = Decks.get(id); if (!d) return;
+  const cmp = e.target.closest("[data-hcmp]"), rs = e.target.closest("[data-hrestore]");
+  if (cmp) {
+    const v = d.history[+cmp.dataset.hcmp]; if (!v) return;
+    histDlg.close(); compareTexts(v.text, d.text, `${d.name} · ${new Date(v.at).toLocaleDateString("es-ES")}`, `${d.name} · actual`);
+  } else if (rs) {
+    const v = d.history[+rs.dataset.hrestore]; if (!v) return;
+    if (!confirm(`¿Volver a la versión del ${vdate(v.at)}? La versión actual se guarda en el historial, así que podrás deshacerlo.`)) return;
+    if (!Decks.restore(id, +rs.dataset.hrestore)) { toast("No se pudo restaurar"); return; }
+    if (deckId === id) { $("#deckText").value = Decks.get(id).text; loadFromText(Decks.get(id).text).then(() => { setCmdInputs(); render(); }); }
+    renderDecks(); toast("Versión restaurada"); openHistory(id);
+  }
+});
+
 const suggDlg = $("#suggDlg");
 function openSuggestions(d) {
   const list = (Cloud.state().suggestions || []).filter(x => x.deck_id === d.id);
@@ -593,6 +635,7 @@ suggDlg.addEventListener("click", async e => {
   cuts.forEach(n => { const c = SF.cached(n); if (c && deck.cards.has(A.key(c))) { deck.cards.delete(A.key(c)); done++; } });
   adds.forEach(n => { const c = SF.cached(n); if (c && !deck.cards.has(A.key(c))) { addToDeck(c); done++; } });
   syncText(); render();
+  pendingNote = `Sugerencias de ${s.author || "un amigo"}`;
   $("#aiOut").innerHTML = `<p style="margin:0">Aplicadas ${done} sugerencias de <b>${esc(s.author || "tu amigo")}</b> (${cuts.length} quitadas, ${adds.length} añadidas). Revisa el mazo y pulsa <b>«Guardar cambios»</b> para guardarlo.</p>`;
   Cloud.setSuggestionStatus(sid, "applied").catch(() => {});
   suggDlg.close();
