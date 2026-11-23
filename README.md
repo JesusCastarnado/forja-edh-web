@@ -78,9 +78,9 @@ Eliges comandante (y partner o fondo si lo tiene), tema, bracket y presupuesto p
 Un constructor guiado:
 
 1. **Eliges comandante**: buscador, filtro por colores («exactos» o «que contengan»), estilos (Fichas, Contadores +1/+1, Agresivo, Aristócratas, Cementerio, Artefactos, Hechizos, Tierras, Voltron, Vida) y los más jugados.
-2. **Montas el mazo por categorías**, cada una con su objetivo:
+2. **Montas el mazo por categorías**, cada una con su objetivo. **Los objetivos se adaptan a tu comandante**: con los datos de EDHREC se calcula cuántas cartas de cada categoría lleva de media un mazo real de ese comandante (sumando, por categoría, en qué porcentaje de sus mazos aparece cada carta) y se reparte el espacio sin tierras en esas proporciones. Por ejemplo, Kinnan pide unas 21 de aceleración y ningún barrido; Light-Paws (voltron de auras), 13 de protección y solo 4 de aceleración. En cada paso se ve el objetivo adaptado y el general («con Kinnan se suelen jugar 21; lo general son 10»), y con **«Usar las generales»** vuelves a las cifras de siempre (la elección se recuerda). Si EDHREC no tiene datos suficientes del comandante, se usan las generales:
 
-   | Paso | Objetivo |
+   | Paso | Objetivo general |
    |---|---|
    | Aceleración (ramp) | 10 |
    | Robo de cartas | 10 |

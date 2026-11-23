@@ -9,7 +9,8 @@ import { money, cardMoney, symbol, currencyName } from "./currency.js";
 const { F } = A;
 const $ = s => document.querySelector(s);
 const SAVE = "forja-guiado";
-const PRICE = "forja-guiado-precio"; // precio máximo por carta (0 = sin límite), en la moneda elegida
+const PRICE = "forja-guiado-precio";
+const GENERAL = "forja-guiado-generales"; // "1" = usar las cifras generales en vez de las adaptadas al comandante // precio máximo por carta (0 = sin límite), en la moneda elegida
 let H = null; // utilidades de app.js: esc, manaHTML, pipsHTML, toast, attachAC, thinking, cmdQuery, onAnalyze
 
 /* ---------- categorías ---------- */
@@ -65,6 +66,8 @@ const st = {
   edh: null, edhDecks: 0, // datos de EDHREC del comandante: Map clave → { synergy, inclusion }
   pick: { colors: new Set(), exact: true, arch: 0, list: [], shown: 24, seq: 0 },
   maxPrice: (() => { try { return Math.max(0, parseFloat(localStorage.getItem(PRICE)) || 0); } catch { return 0; } })(),
+  adapt: null, // objetivos por categoría adaptados al comandante: { t: { ramp: 7, … }, decks }
+  useGeneral: (() => { try { return localStorage.getItem(GENERAL) === "1"; } catch { return false; } })(),
 };
 // Filtro de precio: las cartas más caras que el máximo no se sugieren (las que no tienen precio, sí).
 const priceOk = c => !st.maxPrice || c.price <= st.maxPrice;
@@ -73,10 +76,32 @@ let booted = false;
 const entries = () => [...st.cards.values()];
 const total = () => entries().reduce((n, e) => n + e.q, 0);
 function counts() { const n = Object.fromEntries(STEPS.map(s => [s.k, 0])); for (const e of entries()) n[catOf(e.c)] += e.q; return n; }
-function targets() {
+// Objetivo de cada categoría. Por defecto se adapta al comandante (si EDHREC tiene datos); el plan
+// del comandante se queda con el resto hasta 100. `general: true` da siempre las cifras generales.
+function targets({ general = false } = {}) {
   const t = Object.fromEntries(STEPS.map(s => [s.k, s.t]));
-  t.plan = 100 - st.cmds.length - STEPS.filter(s => s.k !== "plan").reduce((a, s) => a + s.t, 0);
+  if (st.adapt && !st.useGeneral && !general) Object.assign(t, st.adapt.t);
+  t.plan = Math.max(0, 100 - st.cmds.length - STEPS.filter(s => s.k !== "plan").reduce((a, s) => a + t[s.k], 0));
   return t;
+}
+// Cuántas cartas de cada categoría lleva de media un mazo de este comandante: suma, por categoría, el
+// porcentaje de sus mazos en EDHREC en que aparece cada carta. Se reparte el espacio sin tierras en esas
+// proporciones; las tierras se quedan en el objetivo general.
+function computeAdapt() {
+  st.adapt = null;
+  if (!st.edh || st.edhDecks < 30) return;
+  const cmdKeys = new Set(st.cmds.map(A.key)), raw = Object.fromEntries(STEPS.map(s => [s.k, 0]));
+  for (const e of st.edh.values()) {
+    const c = SF.cached(e.name);
+    if (!c || A.isBasic(c) || cmdKeys.has(A.key(c)) || !(e.inclusion > 0)) continue;
+    raw[catOf(c)] += Math.min(1, e.inclusion);
+  }
+  const lands = STEPS.find(s => s.k === "lands").t, space = 100 - st.cmds.length - lands;
+  const nonland = STEPS.filter(s => s.k !== "lands").reduce((a, s) => a + raw[s.k], 0);
+  if (nonland < 30) return; // pocos datos: mejor las cifras generales
+  const f = space / nonland, t = {};
+  for (const s of STEPS) if (s.k !== "lands" && s.k !== "plan") t[s.k] = Math.max(0, Math.round(raw[s.k] * f));
+  st.adapt = { t, decks: st.edhDecks };
 }
 const deckObj = () => ({ cmds: st.cmds, cards: st.cards });
 const save = () => { try { localStorage.setItem(SAVE, JSON.stringify({ cmds: st.cmds.map(c => c.name), cards: entries().map(e => [e.c.name, e.q]), step: st.step, deckId: st.deckId, dirty: st.dirty })); } catch {} };
@@ -106,7 +131,7 @@ const score = c => A.fitScore(c, { edh: st.edh, words: st.words });
 async function loadPool() {
   const ci = A.ciUnion(st.cmds), key = ci + "|" + st.words.join(",");
   if (st.pool && st.poolKey === key) return;
-  st.pool = null; st.poolKey = key; st.edh = null; st.edhDecks = 0; st.synMemo = new Map(); renderGrid();
+  st.pool = null; st.poolKey = key; st.edh = null; st.edhDecks = 0; st.adapt = null; st.synMemo = new Map(); renderGrid(); renderSteps(); if (st.mode === "guided") renderHead();
   try {
     const base = [...await SF.poolFor(ci)];
     const edh = await Edh.forCommanders(st.cmds).catch(() => null);
@@ -115,6 +140,7 @@ async function loadPool() {
       await SF.collection([...edh.cards.values()].map(x => x.name), { fuzzyLimit: 0 }).catch(() => {});
       st.edh = edh.cards; st.edhDecks = edh.decks; st.synMemo = new Map();
       base.push(...[...edh.cards.values()].map(x => SF.cached(x.name)).filter(Boolean));
+      computeAdapt(); renderAll();
     }
     if (st.words.length) {
       const q = `${SF.ciQuery(ci)} legal:commander game:paper (${st.words.slice(0, 5).map(w => `o:"${w}" or t:"${w}"`).join(" or ")})`;
@@ -218,7 +244,11 @@ function renderBar() {
 function renderSteps() {
   const n = counts(), t = targets();
   $("#gSteps").innerHTML = STEPS.map((s, i) => `<li><button class="gstepbtn${st.mode === "guided" && i === st.step ? " cur" : ""}${n[s.k] >= t[s.k] ? " full" : ""}" data-gstep="${i}" style="--c:${s.c}">
-    <span class="dot"></span><span>${s.label}</span><span class="mono">${n[s.k]}/${t[s.k]}</span><span class="gprog"><span style="width:${Math.min(100, n[s.k] / t[s.k] * 100)}%"></span></span></button></li>`).join("");
+    <span class="dot"></span><span>${s.label}</span><span class="mono">${n[s.k]}/${t[s.k]}</span><span class="gprog"><span style="width:${t[s.k] ? Math.min(100, n[s.k] / t[s.k] * 100) : 100}%"></span></span></button></li>`).join("");
+  const note = $("#gTargetsNote"), name = st.cmds.map(c => c.name.split(" // ")[0].split(",")[0]).join(" + ");
+  note.innerHTML = !st.adapt ? (st.edh === null && st.cmds.length ? "" : "Cifras generales para cualquier comandante.")
+    : st.useGeneral ? `Cifras generales. <button class="linkbtn" data-gtargets="adapt">Adaptarlas a ${H.esc(name)}</button>`
+    : `Cifras adaptadas a ${H.esc(name)} según ${st.adapt.decks.toLocaleString("es-ES")} mazos de EDHREC. <button class="linkbtn" data-gtargets="general">Usar las generales</button>`;
   document.querySelectorAll("[data-gmode]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.gmode === st.mode)));
 }
 function renderHead() {
@@ -248,7 +278,7 @@ function renderHead() {
   const src = st.edh ? ` Ordenadas por lo que mejor encaja con tu comandante según ${st.edhDecks ? st.edhDecks.toLocaleString("es-ES") + " mazos de" : ""} EDHREC.` : "";
   head.style.setProperty("--c", s.c);
   head.innerHTML = `<div class="gsegs">${STEPS.map((x, i) => `<span class="${i === st.step ? "cur" : counts()[x.k] >= targets()[x.k] ? "done" : ""}"></span>`).join("")}</div>
-    <div class="gsh"><div><div class="eyebrow">Paso ${st.step + 1} de ${STEPS.length}</div><h3>${s.label} <span class="mono ${n >= t ? "ok" : n >= t - 2 ? "lo" : "muted"}">${n}/${t}</span></h3><p class="muted">${s.desc}${src}</p></div>
+    <div class="gsh"><div><div class="eyebrow">Paso ${st.step + 1} de ${STEPS.length}</div><h3>${s.label} <span class="mono ${n >= t ? "ok" : n >= t - 2 ? "lo" : "muted"}">${n}/${t}</span></h3><p class="muted">${s.desc}${src}${(() => { const g = targets({ general: true })[s.k]; if (!st.adapt || st.useGeneral || g === t) return ""; const who = H.esc(st.cmds.map(c => c.name.split(" // ")[0].split(",")[0]).join(" + ")); return ` <b>Con ${who} se suelen jugar ${t} (lo general son ${g})</b>${t < g ? ": este comandante necesita menos" : ": este comandante pide más"}.`; })()}</p></div>
     <div class="row"><button class="btn" data-gnav="-1" ${st.step === 0 ? "disabled" : ""}>← Atrás</button>${last ? '<button class="btn primary" data-gact="analyze">Analizar mazo</button>' : '<button class="btn primary" data-gnav="1">Siguiente →</button>'}</div></div>`;
 }
 function renderGrid() {
@@ -549,6 +579,12 @@ export function initGuided(helpers) {
     b.setAttribute("aria-label", (on ? "Quitar " : "Añadir ") + c.name);
   });
   $("#gMore").onclick = () => { st.shown += 30; renderGrid(); };
+  $("#gTargetsNote").addEventListener("click", e => {
+    const b = e.target.closest("[data-gtargets]"); if (!b) return;
+    st.useGeneral = b.dataset.gtargets === "general";
+    try { localStorage.setItem(GENERAL, st.useGeneral ? "1" : "0"); } catch {}
+    renderAll(); if (st.mode === "guided") renderHead();
+  });
   $("#gSteps").addEventListener("click", e => {
     const b = e.target.closest("[data-gstep]"); if (!b) return;
     st.step = +b.dataset.gstep; st.mode = "guided"; st.shown = 30; renderSteps(); renderHead(); renderGrid(); save();

@@ -484,3 +484,7 @@ header.top>.row{min-width:0;max-width:100%}
 .aitem input{accent-color:var(--accent)}
 .aitem img{width:36px;border-radius:3px;display:block}
 .aitem:has(input:not(:checked)){opacity:.5}
+.gtnote{margin:0 0 10px}
+.gtnote:empty{display:none}
+.linkbtn{all:unset;cursor:pointer;color:var(--accent);text-decoration:underline}
+.linkbtn:focus-visible{outline:2px solid var(--accent)}
