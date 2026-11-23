@@ -474,3 +474,13 @@ header.top>.row{min-width:0;max-width:100%}
 .gprice .x:hover{color:var(--bad)}
 .tag.syn{border-color:var(--good);color:var(--good)}
 .newswhy{justify-self:start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- Paso a paso: autorrellenar ---------- */
+.gautobox{display:grid;gap:8px}
+.gautobox .btn{width:100%}
+.gauto{display:grid;gap:10px}
+.agroup{display:grid;gap:2px;border-left:3px solid var(--c);padding-left:10px}
+.aitem{display:grid;grid-template-columns:auto 36px minmax(0,1fr) auto;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
+.aitem input{accent-color:var(--accent)}
+.aitem img{width:36px;border-radius:3px;display:block}
+.aitem:has(input:not(:checked)){opacity:.5}

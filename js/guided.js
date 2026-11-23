@@ -350,6 +350,119 @@ Reglas: valora la sinergia con el comandante, la curva, el nivel de poder (brack
   } finally { btn.disabled = false; }
 }
 
+/* ---------- autorrellenar ---------- */
+// Propone las cartas que faltan hasta 100 según lo que ya hay: con IA (mira tus cartas y tu comandante)
+// o rápido sin IA (las que más encajan con el comandante en las categorías que van cortas).
+// Nada se añade sin que el usuario lo confirme.
+let auto = null; // { items: [{ c, why, ai }], basics }
+function gaps() {
+  const n = counts(), t = targets(), need = Math.max(0, 100 - st.cmds.length - total());
+  const landNeed = Math.min(need, Math.max(0, t.lands - n.lands));
+  const def = Object.fromEntries(STEPS.filter(s => s.k !== "lands").map(s => [s.k, Math.max(0, t[s.k] - n[s.k])]));
+  return { need, landNeed, nonlandNeed: need - landNeed, def, n, t };
+}
+async function poolReady() {
+  if (!st.pool) loadPool();
+  for (let i = 0; i < 120 && !st.pool; i++) await new Promise(r => setTimeout(r, 250));
+  return st.pool || [];
+}
+// Completa sin IA: primero las categorías con hueco, luego el plan; las tierras con no básicas que encajen.
+function quickPick(g, taken) {
+  const pool = st.pool || [], out = [], left = { ...g.def };
+  const ok = c => !taken.has(A.key(c)) && !st.cards.has(A.key(c)) && priceOk(c);
+  const take = (c, why) => { taken.add(A.key(c)); out.push({ c, why, ai: false }); };
+  let nl = g.nonlandNeed;
+  for (const s of STEPS) {
+    if (s.k === "lands" || s.k === "plan") continue;
+    for (const c of pool) { if (nl <= 0 || !(left[s.k] > 0)) break; if (is[s.k](c) && ok(c)) { take(c, `Falta ${s.label.toLowerCase()}`); left[s.k]--; nl--; } }
+  }
+  for (const c of pool) { if (nl <= 0) break; if (nonland(c) && ok(c)) { take(c, isSyn(c) ? "Encaja con tu comandante" : "De las más jugadas en tus colores"); nl--; } }
+  let ln = Math.min(g.landNeed, A.ciUnion(st.cmds).length <= 1 ? 6 : 12);
+  for (const c of pool) { if (ln <= 0) break; if (A.isLand(c) && ok(c)) { take(c, "Tierra que entra en tus colores"); ln--; } }
+  return out;
+}
+async function autoFill(withAI) {
+  const box = $("#gAuto"), e = H.esc, g = gaps();
+  box.hidden = false; box.scrollIntoView({ block: "nearest" });
+  if (!g.need) { box.innerHTML = '<p class="ok" style="margin:0">El mazo ya tiene 100 cartas: no queda nada que rellenar.</p>'; return; }
+  if (withAI && !(await H.aiReady(box))) { box.insertAdjacentHTML("beforeend", '<p class="small muted" style="margin:6px 0 0">También puedes usar «Autorrellenar rápido (sin IA)».</p>'); return; }
+  const btns = [$("#gAutoAI"), $("#gAutoQuick")]; btns.forEach(b => b.disabled = true);
+  box.innerHTML = H.thinking("Preparando las cartas que encajan con tu comandante…");
+  try {
+    await poolReady();
+    const taken = new Set(), items = [];
+    if (withAI) {
+      box.innerHTML = H.thinking(`Claude está eligiendo ${g.need} cartas para completar tu mazo… suele tardar entre 20 y 60 segundos.`)
+        + '<button class="btn sm" id="gAutoStop">Detener</button>';
+      const ctl = new AbortController(); $("#gAutoStop").onclick = () => ctl.abort();
+      const ci = A.ciUnion(st.cmds), s = A.analyze(deckObj());
+      const cmdTxt = st.cmds.map(x => `${x.name} (${x.type}${x.sub ? " — " + x.sub : ""}): ${x.text}`).join("\n");
+      const list = entries().map(x => `${x.q} ${x.c.name}`).join("\n");
+      const defs = STEPS.filter(x => x.k !== "lands" && g.def[x.k] > 0).map(x => `${x.label}: faltan ${g.def[x.k]}`).join("; ");
+      const edhHint = st.edh ? [...st.edh.values()].filter(x => x.synergy >= 0.05 && !st.cards.has(SF.norm(x.name))).sort((a, b) => b.synergy - a.synergy).slice(0, 40).map(x => x.name).join(", ") : "";
+      const nonbasic = Math.min(g.landNeed, ci.length <= 1 ? 6 : 12);
+      const prompt = `Completa este mazo de Commander a medio hacer. El jugador ya ha elegido algunas cartas y quiere que el resto encaje con ellas y con el comandante.
+Comandante(s):
+${cmdTxt}
+Identidad de color: ${ci || "incolora"}. Bracket actual estimado B${s.bracket} (${s.gc.length} Game Changers): mantén ese nivel de poder.
+Cartas que ya tiene (${total() + st.cmds.length} de 100):
+${list || "(ninguna todavía)"}
+Huecos por categoría: ${defs || "ninguno: refuerza el plan del comandante"}.
+${edhHint ? "Cartas con mucha sinergia con este comandante según EDHREC (no están en la lista): " + edhHint + "." : ""}
+${st.maxPrice ? `Presupuesto: cada carta debe costar como máximo ${st.maxPrice} ${currencyName()}.` : ""}
+Elige exactamente ${g.nonlandNeed} cartas que no sean tierra y ${nonbasic} tierras no básicas. Primero cubre los huecos de cada categoría; el resto, cartas que aprovechen el comandante y las sinergias de las cartas que ya ha puesto (tribus, tipos, mecánicas que se repiten). Sin cartas repetidas ni ya presentes en la lista, todas legales en Commander y dentro de la identidad ${ci || "incolora"}, con su nombre oficial en inglés.
+Responde SOLO con JSON, con esta forma exacta:
+{"resumen":"1-2 frases: qué refuerzan estas cartas","cartas":[{"carta":"Nombre exacto en inglés","motivo":"muy breve: qué aporta o con qué de su lista combina"}]}`;
+      const r = await AI.askJSON(prompt, { effort: "medium", signal: ctl.signal, onText: ({ text }) => { const m = box.querySelector(".status .msg"); const k = (text.match(/"carta"/g) || []).length; if (m && k) m.textContent = `Eligiendo cartas… (${k} de ${g.nonlandNeed + nonbasic})`; } });
+      const raw = (Array.isArray(r.cartas) ? r.cartas : []).map(x => ({ name: String(x.carta || "").trim(), why: String(x.motivo || "") })).filter(x => x.name);
+      box.innerHTML = H.thinking("Comprobando las cartas en Scryfall…");
+      await SF.collection(raw.map(x => x.name), { fuzzyLimit: 15 }).catch(() => {});
+      const cmdKeys = new Set(st.cmds.map(A.key));
+      let nl = g.nonlandNeed, ln = nonbasic, dropped = 0;
+      for (const x of raw) {
+        const c = SF.cached(x.name), k = c && A.key(c);
+        if (!c || !c.legal || A.isBasic(c) || !A.subsetCI(c.ci, ci) || !priceOk(c) || cmdKeys.has(k) || st.cards.has(k) || taken.has(k)) { dropped++; continue; }
+        if (A.isLand(c) ? ln-- <= 0 : nl-- <= 0) continue;
+        taken.add(k); items.push({ c, why: x.why, ai: true });
+      }
+      auto = { summary: String(r.resumen || ""), dropped };
+    } else auto = { summary: "", dropped: 0 };
+    // Lo que la IA no haya cubierto (o todo, sin IA) se completa con las que más encajan.
+    const have = { nl: items.filter(x => nonland(x.c)).length, l: items.filter(x => A.isLand(x.c)).length };
+    const rest = quickPick({ ...g, nonlandNeed: g.nonlandNeed - have.nl, landNeed: Math.max(0, (withAI ? 0 : g.landNeed) - have.l), def: withAI ? {} : g.def }, taken);
+    items.push(...rest);
+    auto.items = items;
+    auto.basics = Math.max(0, g.need - items.length);
+    renderAuto(withAI);
+  } catch (err) {
+    box.innerHTML = err && err.code === "cancelled" ? '<p class="muted" style="margin:0">Autorrelleno detenido.</p>' : `<p class="no" style="margin:0">${e(AI.errMsg(err))}</p>`;
+  } finally { btns.forEach(b => b.disabled = false); }
+}
+function renderAuto(withAI) {
+  const box = $("#gAuto"), e = H.esc, groups = {};
+  auto.items.forEach((x, i) => (groups[catOf(x.c)] ||= []).push([x, i]));
+  const sum = auto.items.reduce((a, x) => a + (x.c.price || 0), 0);
+  box.innerHTML = `<div class="row between"><h3 style="margin:0">${withAI ? "Propuesta de la IA" : "Propuesta rápida"}: ${auto.items.length} cartas${auto.basics ? ` + ${auto.basics} básicas` : ""}</h3><button class="btn sm" data-auto="close">Cerrar</button></div>
+    ${auto.summary ? `<p style="margin:0">${e(auto.summary)}</p>` : ""}
+    <p class="muted small" style="margin:0">Desmarca las que no quieras. Coste aproximado: ${money(sum)}.${auto.dropped ? ` Se descartaron ${auto.dropped} propuestas de la IA (no existían, no eran legales, se salían de tus colores o del precio, o estaban repetidas) y se han cubierto con las que más encajan.` : ""}${auto.basics ? ` Al añadir, los huecos que queden se rellenan con tierras básicas según tus colores.` : ""}</p>
+    ${STEPS.filter(s => groups[s.k]).map(s => `<div class="agroup" style="--c:${s.c}"><div class="eyebrow">${s.label} · ${groups[s.k].length}</div>${groups[s.k].map(([x, i]) => `
+      <label class="aitem"><input type="checkbox" checked data-ai="${i}">${x.c.small ? `<img src="${e(x.c.small)}" alt="" loading="lazy">` : "<span></span>"}
+        <span style="min-width:0"><button type="button" class="cn" data-name="${e(x.c.name)}">${e(x.c.name)}</button> ${H.manaHTML(x.c.cost)}${isSyn(x.c) ? ' <span class="gb syn">Sinergia</span>' : ""}${x.ai ? "" : ' <span class="gb">auto</span>'}<span class="muted small" style="display:block">${e(x.why || "")}</span></span>
+        <span class="mono small muted">${cardMoney(x.c)}</span></label>`).join("")}</div>`).join("")}
+    <div class="row"><button class="btn primary" data-auto="apply">Añadir las marcadas</button><button class="btn sm" data-auto="all">Marcar todas</button><button class="btn sm" data-auto="none">Desmarcar todas</button></div>`;
+}
+async function applyAuto() {
+  const box = $("#gAuto"); if (!auto) return;
+  const chosen = [...box.querySelectorAll("input[data-ai]:checked")].map(i => auto.items[+i.dataset.ai]).filter(Boolean);
+  let added = 0;
+  for (const { c } of chosen) { if (total() + st.cmds.length >= 100) break; if (!st.cards.has(A.key(c))) { st.cards.set(A.key(c), { c, q: 1 }); added++; } }
+  afterChange();
+  if (total() + st.cmds.length < 100) await fillBasics(); // también avisa si ya hay todas las tierras
+  renderGrid();
+  box.innerHTML = `<p class="ok" style="margin:0">Añadidas ${added} cartas. Ahora llevas ${total() + st.cmds.length} de 100.${total() + st.cmds.length < 100 ? " Te quedan huecos: puedes volver a autorrellenar o elegirlas a mano." : ""}</p>`;
+  auto = null;
+}
+
 /* ---------- acciones ---------- */
 function afterChange() { st.dirty = true; renderAll(); if (st.mode === "guided") renderHead(); save(); }
 function toggle(c) {
@@ -456,6 +569,15 @@ export function initGuided(helpers) {
     afterChange(); renderGrid();
   });
   $("#gBasics").onclick = fillBasics;
+  $("#gAutoAI").onclick = () => autoFill(true);
+  $("#gAutoQuick").onclick = () => autoFill(false);
+  $("#gAuto").addEventListener("click", e => {
+    const b = e.target.closest("[data-auto]"); if (!b) return;
+    const a = b.dataset.auto, boxes = $("#gAuto").querySelectorAll("input[data-ai]");
+    if (a === "apply") applyAuto();
+    else if (a === "all" || a === "none") boxes.forEach(i => { i.checked = a === "all"; });
+    else if (a === "close") { $("#gAuto").hidden = true; auto = null; }
+  });
   H.attachAC($("#gFitCard"), { query: q => `${q} game:paper` });
   $("#gFitBtn").onclick = fitCard;
   $("#gFitCard").addEventListener("keydown", e => { if (e.key === "Enter" && !e.defaultPrevented) setTimeout(fitCard, 0); });

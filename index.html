@@ -191,7 +191,12 @@
             <p class="muted small" id="gMaxNote" style="margin:0"></p>
           </div>
         </div>
-        <button class="btn" id="gBasics">Completar con básicas</button>
+        <div class="panel gautobox">
+          <div class="eyebrow">¿No sabes qué más poner?</div>
+          <button class="btn primary ai" id="gAutoAI" title="Claude mira tu comandante y tus cartas y propone las que faltan">Autorrellenar con IA</button>
+          <button class="btn sm" id="gAutoQuick" title="Sin IA: las que más encajan con el comandante en las categorías que faltan">Autorrellenar rápido (sin IA)</button>
+          <button class="btn sm" id="gBasics">Completar con básicas</button>
+        </div>
         <div class="panel" id="gCmdPanel"></div>
       </aside>
       <div class="stack">
@@ -203,6 +208,7 @@
           </div>
           <div id="gFitOut"></div>
         </div>
+        <div class="panel gauto" id="gAuto" hidden></div>
         <div class="ggrid" id="gGrid"></div>
         <div class="row gmore"><button class="btn" id="gMore" hidden>Ver más</button></div>
       </div>

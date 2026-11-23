@@ -96,6 +96,10 @@ Un constructor guiado:
 3. **Modo libre**: busca cualquier carta en tu identidad de color (por nombre, tipo o con la sintaxis de Scryfall).
 4. **Completar con básicas**: rellena las tierras que faltan según tus símbolos de maná.
 5. **¿Encaja esta carta?**: escribe una carta que te guste y la IA te dice si encaja en el mazo (*Buena idea*, *Depende* o *Mejor no*), con razones a favor y en contra, qué cartas quitarías para meterla y alternativas mejores, cada una con su botón para añadir o quitar. Antes de llamar a la IA comprueba gratis que la carta exista, sea legal y entre en los colores de tu comandante.
+6. **Autorrellenar**: cuando ya has puesto las cartas que tenías claras (10, 15, 85…) y no sabes qué más meter, completa el mazo hasta 100:
+   - **Con IA**: Claude mira tu comandante y **las cartas que ya has puesto** (tribus, tipos y mecánicas que se repiten) y elige las que faltan, cubriendo primero las categorías que van cortas y manteniendo tu bracket y tu precio máximo por carta. También recibe las cartas con más sinergia según EDHREC.
+   - **Rápido (sin IA)**: las que más encajan con el comandante en las categorías que faltan, y luego para el plan del comandante.
+   - En los dos casos te enseña la **propuesta agrupada por categoría**, con el motivo de cada carta y el coste total, y **no añade nada hasta que pulsas «Añadir las marcadas»**; puedes desmarcar las que no quieras. Cada carta de la IA se comprueba en Scryfall (que exista, sea legal, esté en tus colores, no esté repetida y respete el precio); si alguna no vale, su hueco se cubre con las que más encajan. Los huecos de tierras que queden se rellenan con básicas según tus colores.
 
 Arriba ves siempre las cartas que llevas (de 100), el precio, el coste medio, el bracket y los Game Changers; a la derecha, tu mazo por categorías y la curva. El borrador se guarda solo. Con **Analizar mazo** pasas a la pestaña Analizar, con **Guardar en Mis mazos** lo guardas y con **+ Nuevo mazo** vuelves a elegir comandante para empezar otro (si el actual tiene cambios sin guardar, te ofrece guardarlo antes).
 
