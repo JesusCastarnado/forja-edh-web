@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 25, fecha: "2026-11-23", titulo: "Construir con un presupuesto total", ir: "#construir",
+    texto: "En Construir ya no pones un precio por carta: escribes lo que quieres que cueste el mazo entero («100 €») y lo genera dentro de ese dinero, con o sin IA. Si se pasa, cambia las cartas caras por otras baratas que hacen lo mismo y te dice cuánto cuesta al final." },
   { id: 24, fecha: "2026-11-23", titulo: "Instálala como app en el móvil", ir: "#analizar",
     texto: "Forja EDH ya se puede instalar en el móvil con su icono, a pantalla completa como cualquier app. En Android pulsa «Instalar app» arriba; en iPhone, en Safari: Compartir → «Añadir a pantalla de inicio». Además se ve mejor en pantallas pequeñas: cabecera más compacta y la mano de prueba con tres cartas por fila." },
   { id: 23, fecha: "2026-11-23", titulo: "Historial de versiones de tus mazos", ir: "#mazos",

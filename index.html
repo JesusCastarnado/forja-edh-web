@@ -141,8 +141,8 @@
       <div class="two">
         <label class="f" for="bBracket">Bracket
           <select id="bBracket"><option value="2">B2 · Core (precon)</option><option value="3" selected>B3 · Upgraded</option><option value="4">B4 · Optimized</option><option value="5">B5 · cEDH</option></select></label>
-        <label class="f" for="bBudget">Presupuesto por carta
-          <select id="bBudget"><option value="0">Sin límite</option><option value="5" data-cur>Hasta 5 $</option><option value="1.5" data-cur>Hasta 1,5 $</option></select></label>
+        <label class="f" for="bBudget" title="Lo que quieres que cueste el mazo entero, comandante incluido">Presupuesto del mazo (total)
+          <span class="gprice"><input type="number" id="bBudget" min="0" step="5" inputmode="decimal" placeholder="Sin límite"><span id="bBudgetSym">$</span></span></label>
       </div>
       <div class="row">
         <button class="btn primary ai" id="btnGenAI">Que la IA lo genere</button>

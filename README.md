@@ -67,10 +67,11 @@ Además:
 
 ### Construir
 
-Eliges comandante (y partner o fondo si lo tiene), tema, bracket y presupuesto por carta, y:
+Eliges comandante (y partner o fondo si lo tiene), tema, bracket y **presupuesto del mazo** (lo que quieres que cueste entero, comandante incluido; vacío = sin límite), y:
 
 - **Que la IA lo genere**: Claude arma las 99 (o 98 con dos comandantes) teniendo en cuenta las cartas nuevas.
 - **Generar automático** (sin IA): las cartas más jugadas según EDHREC, con cuotas de ramp, robo e interacción y las tierras repartidas según tus colores.
+- **Presupuesto total**: con presupuesto, las cartas se eligen con un tope por carta holgado y, si el mazo aun así se pasa, se cambian las más caras por alternativas baratas con la misma función (lo mismo que «A presupuesto» de Analizar) hasta bajar del total. La IA recibe también el presupuesto y lo que cuesta el comandante. Al terminar te dice cuánto cuesta el mazo y cuántas cartas se cambiaron; si no se puede bajar del total sin perder la función de las cartas (por ejemplo, porque el comandante ya es muy caro), te lo avisa.
 - Lista de **comandantes nuevos** de los últimos 4 meses.
 
 ### Paso a paso

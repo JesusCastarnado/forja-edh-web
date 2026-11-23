@@ -1087,7 +1087,13 @@ async function readBuilder() {
   if (names.some(Boolean)) await SF.collection(names.filter(Boolean)).catch(() => {});
   bCmds = names.map(n => n ? SF.cached(n) || null : null);
   showCmdPreview();
-  return { cmds: bCmds.filter(Boolean), theme: $("#bTheme").value.trim(), bracket: +$("#bBracket").value, budget: +$("#bBudget").value };
+  // Presupuesto TOTAL del mazo (comandante incluido). Para elegir cartas se usa además un tope por carta
+  // holgado (unas 4 veces la media) y, al final, fitBudget() cambia las más caras hasta bajar del total.
+  const budgetTotal = Math.max(0, parseFloat(String($("#bBudget").value).replace(",", ".")) || 0);
+  store.set("forja-construir-presupuesto", budgetTotal ? String(budgetTotal) : "");
+  const cmds = bCmds.filter(Boolean);
+  const budget = budgetTotal ? Math.max(0.5, budgetTotal / Math.max(1, 100 - cmds.length) * 4) : 0;
+  return { cmds, theme: $("#bTheme").value.trim(), bracket: +$("#bBracket").value, budget, budgetTotal };
 }
 let basicsCache = null;
 async function getBasics() {
@@ -1109,6 +1115,30 @@ async function autoFill(o, cards, st) {
   }
   return A.fillDeck(o.cmds, cards, pool, await getBasics(), { ...o, boosted, edh: edhMap(edh) });
 }
+// Si el mazo se pasa del presupuesto total, cambia las cartas más caras por otras baratas con la misma
+// función (lo mismo que «A presupuesto» de Analizar, sin IA). Devuelve { swaps, from, to } o null.
+async function fitBudget(o, cards) {
+  if (!o.budgetTotal) return null;
+  const d = { cmds: o.cmds, cards }, from = A.analyze(d).price;
+  if (from <= o.budgetTotal) return { swaps: 0, from, to: from };
+  const ci = A.ciUnion(o.cmds), pool = [...await SF.poolFor(ci)], edh = await edhFor(o.cmds);
+  if (edh) pool.push(...[...edh.cards.values()].map(e => SF.cached(e.name)).filter(Boolean));
+  const basics = await getBasics().catch(() => ({}));
+  let swaps = 0;
+  for (let pass = 0; pass < 3 && A.analyze(d).price > o.budgetTotal; pass++) {
+    const r = A.budgetSwaps(d, pool, o.budgetTotal, basics, { edh: edhMap(edh) });
+    if (!r.swaps.length) break;
+    for (const sw of r.swaps) {
+      cards.delete(A.key(sw.out));
+      const k = A.key(sw.in), e = cards.get(k); cards.set(k, { c: sw.in, q: (e ? e.q : 0) + 1 });
+      swaps++;
+    }
+  }
+  return { swaps, from, to: A.analyze(d).price };
+}
+const budgetNote = (o, fb) => !fb ? "" : fb.to <= o.budgetTotal
+  ? ` Cuesta unos <b>${money(fb.to)}</b> de tu presupuesto de ${money(o.budgetTotal)}${fb.swaps ? ` (se cambiaron ${fb.swaps} cartas caras por alternativas baratas; antes costaba ${money(fb.from)})` : ""}.`
+  : ` <span class="lo">Cuesta unos <b>${money(fb.to)}</b>: no se ha podido bajar de ${money(o.budgetTotal)} sin perder la función de las cartas${fb.swaps ? ` (ya se cambiaron ${fb.swaps})` : ""}${(() => { const c = o.cmds.reduce((a, x) => a + (x.price || 0), 0); return c >= o.budgetTotal * 0.2 ? `; solo el comandante ya cuesta ${money(c)}` : ""; })()}. Prueba «A presupuesto» en Analizar o sube el presupuesto.</span>`;
 function loadBuilt(cmds, cards, note, id = null) {
   deck = { cmds, cards, unknown: [], illegal: [] }; setDeckId(id); syncText(); render();
   $("#aiOut").innerHTML = note ? `<div>${note}</div>` : "";
@@ -1118,8 +1148,10 @@ $("#btnGenAuto").onclick = async () => {
   const st = $("#genStatus"), o = await readBuilder();
   if (!o.cmds.length) { st.innerHTML = '<span class="no">Elige un comandante de la lista.</span>'; return; }
   try {
-    const cards = await autoFill(o, new Map(), st); st.innerHTML = "";
-    loadBuilt(o.cmds, cards, `<p class="muted" style="margin:0">Mazo generado automáticamente con lo que más se juega con este comandante (EDHREC) y las cuotas de ramp, robo e interacción${o.theme ? `, priorizando «${esc(o.theme)}»` : ""}. Usa «Optimizar con IA» para afinar la sinergia.</p>`);
+    const cards = await autoFill(o, new Map(), st);
+    st.innerHTML = o.budgetTotal ? '<span class="spin"></span><span>Ajustando al presupuesto…</span>' : "";
+    const fb = await fitBudget(o, cards); st.innerHTML = "";
+    loadBuilt(o.cmds, cards, `<p class="muted" style="margin:0">Mazo generado automáticamente con lo que más se juega con este comandante (EDHREC) y las cuotas de ramp, robo e interacción${o.theme ? `, priorizando «${esc(o.theme)}»` : ""}. Usa «Optimizar con IA» para afinar la sinergia.${budgetNote(o, fb)}</p>`);
   } catch (e) { st.innerHTML = `<span class="no">No se pudo consultar Scryfall: ${esc(e.message || e)}</span>`; }
 };
 $("#btnGenAI").onclick = async () => {
@@ -1136,7 +1168,7 @@ ${cmdTxt}
 Identidad de color: ${ci || "incolora"}.
 Tema: ${o.theme || "la estrategia más fuerte y divertida para este comandante"}.
 Nivel: ${brDesc}.
-${o.budget ? `Presupuesto: cartas de hasta ${o.budget} ${currencyName()} cada una aproximadamente.` : ""}
+${o.budgetTotal ? `Presupuesto: el mazo COMPLETO (comandante incluido) debe costar como máximo ${o.budgetTotal} ${currencyName()} en total; el comandante cuesta ${o.cmds.reduce((a, c) => a + (c.price || 0), 0).toFixed(2)}. Reparte el dinero: casi todo cartas baratas y, como mucho, unas pocas piezas clave más caras.` : ""}
 ${await newsBrief(ci)}
 ${synergyBrief(await edhFor(o.cmds), o.cmds, new Map(), { max: 50, maxPrice: o.budget || 0 })}
 Esqueleto: 36-37 tierras en total, unas 10 piezas de ramp, 10 de robo, 8-10 de interacción y 2-3 barridos, más sinergia y formas de ganar. ${SYN_RULE}
@@ -1159,8 +1191,10 @@ Responde SOLO con JSON con esta forma exacta:
     const before = [...cards.values()].reduce((a, e) => a + e.q, 0);
     await autoFill(o, cards, st);
     const after = [...cards.values()].reduce((a, e) => a + e.q, 0);
+    st.innerHTML = o.budgetTotal ? '<span class="spin"></span><span>Ajustando al presupuesto…</span>' : "";
+    const fb = await fitBudget(o, cards);
     st.innerHTML = "";
-    loadBuilt(o.cmds, cards, `<p style="margin:0"><strong class="grade" style="font-family:var(--f-display);font-weight:400;font-size:18px">${esc(r.nombre || "Mazo generado")}</strong></p><p style="margin:4px 0 0">${esc(r.estrategia)}</p>${rejected.length || after !== before ? `<p class="muted small" style="margin:6px 0 0">${rejected.length ? `Descartadas ${rejected.length} cartas no válidas (${rejected.slice(0, 6).map(esc).join(", ")}${rejected.length > 6 ? "…" : ""}). ` : ""}${after > before ? `Completado con ${after - before} cartas automáticas para llegar a ${100 - o.cmds.length}.` : ""}</p>` : ""}`);
+    loadBuilt(o.cmds, cards, `<p style="margin:0"><strong class="grade" style="font-family:var(--f-display);font-weight:400;font-size:18px">${esc(r.nombre || "Mazo generado")}</strong></p><p style="margin:4px 0 0">${esc(r.estrategia)}</p>${rejected.length || after !== before ? `<p class="muted small" style="margin:6px 0 0">${rejected.length ? `Descartadas ${rejected.length} cartas no válidas (${rejected.slice(0, 6).map(esc).join(", ")}${rejected.length > 6 ? "…" : ""}). ` : ""}${after > before ? `Completado con ${after - before} cartas automáticas para llegar a ${100 - o.cmds.length}.` : ""}</p>` : ""}${fb ? `<p class="small" style="margin:6px 0 0">${budgetNote(o, fb).trim()}</p>` : ""}`);
   } catch (e) { st.innerHTML = e && e.code === "cancelled" ? '<span class="muted">Generación detenida.</span>' : `<span class="no">${esc(AI.errMsg(e))}</span>`; }
   finally { btn.disabled = false; }
 };
@@ -1180,7 +1214,8 @@ $("#newCmds").addEventListener("click", e => {
 const curSel = $("#currency");
 curSel.value = currency();
 curSel.onchange = () => setCurrency(curSel.value);
-function updateBudgetLabels() { document.querySelectorAll("#bBudget option[data-cur]").forEach(o => { o.textContent = `Hasta ${o.value.replace(".", ",")} ${symbol()}`; }); }
+function updateBudgetLabels() { $("#bBudgetSym").textContent = symbol(); }
+$("#bBudget").value = store.get("forja-construir-presupuesto") || "";
 updateBudgetLabels();
 addEventListener("currencychange", () => {
   curSel.value = currency(); updateBudgetLabels(); render();
