@@ -51,9 +51,17 @@ export function upsert({ id, name, cmds, cards, note = "" }) {
     const prev = all[i];
     d.created = prev.created || now;
     d.history = prev.text !== d.text ? [snapshot(prev), ...(prev.history || [])].slice(0, MAX_VERSIONS) : (prev.history || []);
+    if (prev.guide) d.guide = prev.guide; // la guía se queda aunque cambie la lista (se avisa si es de una versión anterior)
     all[i] = d;
   } else { d.created = now; d.history = []; all.push(d); }
   return write(all) ? d.id : null;
+}
+// Guía del mazo escrita con la IA: { text (markdown), at, forText (la lista para la que se escribió) }.
+export function setGuide(id, text) {
+  const all = read(), d = all.find(x => x.id === id); if (!d) return false;
+  d.guide = text ? { text: String(text).slice(0, 20000), at: Date.now(), forText: d.text } : null;
+  d.updated = Date.now(); // para que la nube se entere
+  return write(all);
 }
 // Vuelve a una versión anterior. La versión actual pasa al historial, así que también se puede deshacer.
 export function restore(id, index) {

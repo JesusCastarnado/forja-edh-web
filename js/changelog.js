@@ -2,6 +2,10 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 28, fecha: "2026-11-23", titulo: "Guía del mazo con IA", ir: "#analizar", ia: true,
+    texto: "En Analizar, «Guía del mazo» escribe cómo se juega tu mazo: plan, mulligan, primeros turnos, cartas clave, combos y qué le cuesta. Guárdala con el mazo y la verán también tus amigos en el enlace compartido." },
+  { id: 27, fecha: "2026-11-23", titulo: "Importar de Archidekt y exportar para Moxfield", ir: "#analizar",
+    texto: "Pega el enlace de un mazo de Archidekt donde va la lista y se importa solo. De Moxfield, copia la lista con «Export → Copy for MTGA». Y al copiar tu lista puedes elegir el formato: para Moxfield/Arena, para Archidekt o texto simple." },
   { id: 26, fecha: "2026-11-23", titulo: "Construye con tu colección", ir: "#construir",
     texto: "Si marcas tus cartas en Colección, ahora puedes generar mazos «solo con las que tengo» o «primero las que tengo», en Construir y en Paso a paso (también con Autorrellenar y con IA). Las tuyas salen con la etiqueta «La tengo», y te dice cuántas te faltan y cuánto cuestan." },
   { id: 25, fecha: "2026-11-23", titulo: "Construir con un presupuesto total", ir: "#construir",

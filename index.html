@@ -50,7 +50,7 @@
 
   <div class="import panel">
     <label class="f" for="deckText">Lista del mazo (nombres en inglés)
-      <textarea id="deckText" spellcheck="false" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;..."></textarea>
+      <textarea id="deckText" spellcheck="false" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;...&#10;&#10;O pega el enlace de un mazo de Archidekt"></textarea>
     </label>
     <div class="side">
       <div class="ac"><label class="f" for="cmd1">Comandante
@@ -60,6 +60,7 @@
       <div class="row">
         <button class="btn primary" id="btnAnalyze">Analizar mazo</button>
         <button class="btn" id="btnCopy">Copiar lista</button>
+        <select id="exportFmt" class="cursel" aria-label="Formato al copiar la lista" title="Formato al copiar la lista"><option value="moxfield">para Moxfield / Arena</option><option value="archidekt">para Archidekt</option><option value="plain">texto simple</option></select>
         <button class="btn" id="btnSaveDeck">Guardar en Mis mazos</button>
       </div>
       <p class="muted small" id="deckSaved" style="margin:0" hidden></p>
@@ -93,6 +94,7 @@
         <div class="row">
           <button class="btn primary ai" id="btnOpt">Optimizar con IA</button>
           <button class="btn ai" id="btnXray">Radiografía del mazo</button>
+          <button class="btn ai" id="btnGuide" title="Una guía para compartir: plan, mulligan, cómo jugarlo y cartas clave">Guía del mazo</button>
           <button class="btn" id="btnQuick">Sugerencias rápidas</button>
           <button class="btn" id="btnBudget" title="Cambia las cartas caras por otras baratas de la misma función">A presupuesto</button>
           <label class="f inline" for="optBracket">Bracket objetivo
@@ -269,7 +271,7 @@
     <h3>Pegar lista</h3>
     <div class="import">
       <label class="f" for="pasteText">Lista del mazo (nombres en inglés)
-        <textarea id="pasteText" spellcheck="false" placeholder="Commander&#10;1 Krenko, Mob Boss&#10;&#10;Deck&#10;1 Sol Ring&#10;1 Arcane Signet&#10;..."></textarea>
+        <textarea id="pasteText" spellcheck="false" placeholder="Commander&#10;1 Krenko, Mob Boss&#10;&#10;Deck&#10;1 Sol Ring&#10;1 Arcane Signet&#10;...&#10;&#10;O pega el enlace de un mazo de Archidekt"></textarea>
       </label>
       <div class="side">
         <label class="f" for="pasteName">Nombre del mazo (opcional)
@@ -440,6 +442,7 @@
   </form>
 </dialog>
 
+<dialog id="guideDlg" class="sdlg" aria-label="Guía del mazo"><div id="guideBody" class="form"></div></dialog>
 <dialog id="histDlg" class="sdlg" aria-label="Historial de versiones"><div id="histBody" class="form"></div></dialog>
 <dialog id="suggDlg" class="sdlg" aria-label="Sugerencias"><div id="suggBody" class="form"></div></dialog>
 <dialog id="nameDlg">

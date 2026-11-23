@@ -7,8 +7,10 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
 const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/+esm"; // admite las claves «publishable»
 const COLS = "id,name,cmds,text,stats,created,updated,deleted";
-// El historial de versiones va en la columna `history`; si la base de datos aún no la tiene, se sincroniza sin él.
-let hasHistory = true;
+// Columnas que se añadieron más tarde (historial de versiones y guía del mazo): si la base de datos
+// aún no tiene alguna, se sincroniza sin ella en vez de fallar.
+const OPTIONAL = ["history", "guide"];
+const optOn = new Set(OPTIONAL);
 
 let client = null, user = null, syncing = null, timer = null, lastSync = 0, lastError = "", suggestions = [], colError = "", published = new Set();
 let readyResolve; const readyP = new Promise(r => { readyResolve = r; });
@@ -92,8 +94,13 @@ async function run() {
     const uid = user.id;
     const changed = await syncWith({
       list: async () => {
-        let r = await client.from("decks").select(hasHistory ? COLS + ",history" : COLS);
-        if (r.error && hasHistory && /history/.test(r.error.message || "")) { hasHistory = false; r = await client.from("decks").select(COLS); }
+        let r;
+        for (;;) {
+          r = await client.from("decks").select([COLS, ...optOn].join(","));
+          const miss = r.error && [...optOn].find(c => String(r.error.message || "").includes(c));
+          if (!miss) break;
+          optOn.delete(miss);
+        }
         if (r.error) throw r.error; return r.data || [];
       },
       upsert: async rows => { if (!rows.length) return; const { error } = await client.from("decks").upsert(rows.map(r => ({ ...r, user_id: uid }))); if (error) throw error; },
@@ -227,9 +234,10 @@ export async function setSuggestionStatus(id, status) {
 }
 
 const toRow = d => ({ id: d.id, name: d.name, cmds: d.cmds || [], text: d.text, stats: d.stats || {}, created: d.created || d.updated || Date.now(), updated: d.updated || Date.now(), deleted: false,
-  ...(hasHistory ? { history: Array.isArray(d.history) ? d.history : [] } : {}) });
+  ...(optOn.has("history") ? { history: Array.isArray(d.history) ? d.history : [] } : {}),
+  ...(optOn.has("guide") ? { guide: d.guide || null } : {}) });
 const fromRow = r => ({ id: r.id, name: r.name, cmds: r.cmds || [], text: r.text, stats: r.stats || {}, created: +r.created || +r.updated, updated: +r.updated,
-  history: Array.isArray(r.history) ? r.history : [] });
+  history: Array.isArray(r.history) ? r.history : [], guide: r.guide && r.guide.text ? r.guide : null });
 
 // Mezcla los mazos de este navegador con los de la nube. `remote` = { list(), upsert(rows) }.
 // Devuelve true si cambió algo en este navegador. Exportada para poder probarla sin Supabase.

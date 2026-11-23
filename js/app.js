@@ -5,6 +5,7 @@ import { initGuided, showGuided, editInGuided, newDeck } from "./guided.js";
 import { CHANGELOG } from "./changelog.js";
 import { initAdmin, showAdmin } from "./admin.js";
 import * as Owned from "./owned.js";
+import * as Ex from "./exchange.js";
 import * as Decks from "./decks.js";
 import * as Cloud from "./cloud.js";
 import { initShared, showShared } from "./shared.js";
@@ -126,12 +127,17 @@ const cmdQuery = q => `is:commander game:paper ${q}`;
 let deck = { cmds: [], cards: new Map(), unknown: [], illegal: [] };
 let viewMode = store.get("forja-view") === "visual" ? "visual" : "list";
 
-async function loadFromText(text, overrideNames = []) {
+// Si el usuario carga un mazo mientras la página aún está cargando el guardado, el suyo gana.
+let userDeck = false;
+async function loadFromText(text, overrideNames = [], { boot = false } = {}) {
+  if (!boot) userDeck = true;
   const n = new Set(A.parseList(text).main.map(e => e.name)).size;
   const st = $("#loadStatus");
   st.innerHTML = `<span class="spin"></span><span>Buscando ${n} cartas en Scryfall…</span>`;
   try {
-    deck = await buildDeck(text, overrideNames);
+    const d = await buildDeck(text, overrideNames);
+    if (boot && userDeck) return; // mientras tanto el usuario ya ha cargado otro mazo
+    deck = d;
     st.innerHTML = "";
   } catch (e) {
     st.innerHTML = `<span class="no">No se pudo consultar Scryfall: ${esc(e.message || e)}. Comprueba la conexión y vuelve a intentarlo.</span>`;
@@ -362,13 +368,30 @@ async function newsBrief(ci) {
 }
 
 /* ---------- acciones de la pestaña Analizar ---------- */
+// Si en el cuadro de la lista hay un enlace de Archidekt, trae el mazo; si es de Moxfield, explica cómo copiarlo.
+// Devuelve { text, name } listo para leer, o null si no se puede (y deja el aviso en `st`).
+async function resolveLink(text, st) {
+  const link = Ex.deckLink(text);
+  if (!link) return { text, name: "" };
+  if (link.site === "moxfield") { st.innerHTML = `<span class="lo">${esc(Ex.MOXFIELD_HELP)}</span>`; return null; }
+  st.innerHTML = '<span class="spin"></span><span>Importando el mazo de Archidekt…</span>';
+  try { return await Ex.fromArchidekt(link.id); }
+  catch (e) { st.innerHTML = `<span class="no">${esc(e.message || e)}</span>`; return null; }
+}
 $("#btnAnalyze").onclick = async () => {
+  const got = await resolveLink($("#deckText").value, $("#loadStatus"));
+  if (!got) return;
+  if (got.name) { $("#deckText").value = got.text; $("#cmd1").value = ""; $("#cmd2").value = ""; toast(`Importado de Archidekt: ${got.name}`); }
   const ov = [$("#cmd1").value, $("#cmd2").value].map(v => v.trim()).filter(Boolean);
-  await loadFromText($("#deckText").value, ov);
+  await loadFromText(got.text || $("#deckText").value, ov);
+  if (got.name) syncText(); // el cuadro muestra el mazo importado
   setCmdInputs(); render(); $("#aiOut").innerHTML = "";
 };
+$("#exportFmt").value = store.get("forja-export") || "moxfield";
+$("#exportFmt").onchange = e => store.set("forja-export", e.target.value);
 $("#btnCopy").onclick = async () => {
-  const t = A.deckToText(deck);
+  const fmt = $("#exportFmt").value, t = Ex.exportText(deck, fmt);
+  if (fmt !== "moxfield") { try { await navigator.clipboard.writeText(t); toast(`Lista copiada (${Ex.FORMATS[fmt]})`); } catch { toast("No se pudo copiar"); } return; }
   try { await navigator.clipboard.writeText(t); toast("Lista copiada"); }
   catch { const ta = $("#deckText"); ta.value = t; ta.focus(); ta.select(); toast("Selecciona y copia el texto"); }
 };
@@ -385,7 +408,8 @@ const savedDeck = () => { const d = deckId && Decks.get(deckId); return sameCmds
 function setDeckId(id) { deckId = id || null; store.set("forja-deck-id", deckId || ""); renderSavedNote(); }
 function renderSavedNote() {
   const d = savedDeck(), p = $("#deckSaved");
-  p.hidden = !d; if (d) p.textContent = `Guardado en Mis mazos como «${d.name}». Pulsa «Guardar cambios» para actualizarlo.`;
+  p.hidden = !d; if (d) p.innerHTML = `Guardado en Mis mazos como «${esc(d.name)}». Pulsa «Guardar cambios» para actualizarlo.${d.guide ? ' <button class="linkbtn" id="seeGuide">Ver su guía</button>' : ""}`;
+  if (d && d.guide) $("#seeGuide").onclick = () => openGuide(d.id);
   $("#btnSaveDeck").textContent = d ? "Guardar cambios" : "Guardar en Mis mazos";
 }
 // Guarda (o actualiza, si ya existe con el mismo comandante) y devuelve el id, o null si se cancela.
@@ -429,7 +453,7 @@ function renderDecks() {
         <div class="small muted">Actualizado ${ago(d.updated)}</div>
         ${nAll ? `<button class="btn sm dsugg${nNew ? " new" : ""}" data-dact="sugg">${nNew ? `${nNew} ${nNew === 1 ? "sugerencia nueva" : "sugerencias nuevas"}` : `${nAll} ${nAll === 1 ? "sugerencia" : "sugerencias"}`}</button>` : ""}
         <div class="row"><button class="btn sm primary" data-dact="open">Abrir</button><button class="btn sm" data-dact="guided">Editar paso a paso</button><button class="btn sm" data-dact="share">Compartir</button>${pub.has(d.id) ? '<button class="btn sm pub" data-dact="pub" title="Está en la comunidad. Pulsa para quitarlo">✓ En la comunidad</button>' : '<button class="btn sm" data-dact="pub" title="Publícalo para que otros jugadores lo vean y te sugieran cambios">Publicar</button>'}</div>
-        <div class="row dminor"><button class="btn sm" data-dact="copy">Copiar lista</button><button class="btn sm" data-dact="rename">Renombrar</button><button class="btn sm" data-dact="dup">Duplicar</button>${(d.history || []).length ? `<button class="btn sm" data-dact="hist">Historial (${d.history.length})</button>` : ""}<button class="btn sm danger" data-dact="del">Borrar</button></div>
+        <div class="row dminor"><button class="btn sm" data-dact="copy">Copiar lista</button><button class="btn sm" data-dact="rename">Renombrar</button><button class="btn sm" data-dact="dup">Duplicar</button>${d.guide ? '<button class="btn sm" data-dact="guide">Guía</button>' : ""}${(d.history || []).length ? `<button class="btn sm" data-dact="hist">Historial (${d.history.length})</button>` : ""}<button class="btn sm danger" data-dact="del">Borrar</button></div>
       </div></article>`;
   }).join("") || '<p class="muted">Ningún mazo coincide con la búsqueda.</p>';
 }
@@ -454,6 +478,8 @@ $("#decksList").addEventListener("click", async e => {
   } else if (act === "rename") {
     const name = await askName("Renombrar mazo", d.name);
     if (name) { Decks.rename(id, name); renderDecks(); renderSavedNote(); }
+  } else if (act === "guide") {
+    openGuide(d.id);
   } else if (act === "hist") {
     openHistory(d.id);
   } else if (act === "dup") {
@@ -705,8 +731,12 @@ attachAC($("#pasteCmd"), { query: cmdQuery });
 $("#decksPasteBtn").onclick = () => { $("#decksPaste").hidden = false; $("#decksStatus").innerHTML = ""; $("#pasteText").focus(); };
 $("#pasteCancel").onclick = () => { $("#decksPaste").hidden = true; $("#pasteStatus").innerHTML = ""; };
 $("#pasteSave").onclick = async () => {
-  const st = $("#pasteStatus"), btn = $("#pasteSave"), text = $("#pasteText").value;
+  const st = $("#pasteStatus"), btn = $("#pasteSave");
+  let text = $("#pasteText").value;
   if (!text.trim()) { st.innerHTML = '<span class="lo">Pega una lista primero.</span>'; $("#pasteText").focus(); return; }
+  const got = await resolveLink(text, st);
+  if (!got) return;
+  if (got.name) { text = got.text; $("#pasteText").value = text; if (!$("#pasteName").value.trim()) $("#pasteName").value = got.name; }
   btn.disabled = true; st.innerHTML = '<span class="spin"></span><span>Buscando las cartas en Scryfall…</span>';
   try {
     const d = await buildDeck(text, [$("#pasteCmd").value.trim()].filter(Boolean));
@@ -1073,6 +1103,69 @@ $("#btnXray").onclick = async () => {
   $("#stopX")?.parentElement.remove();
 };
 
+/* ---------- guía del mazo (IA) ---------- */
+// Una guía para compartir, más completa que la Radiografía. Se puede copiar o guardar con el mazo de
+// Mis mazos; guardada, se ve también en el enlace compartido.
+let lastGuide = "";
+$("#btnGuide").onclick = async () => {
+  const out = $("#aiOut"); if (!deck.cards.size) { out.innerHTML = '<p class="lo">Primero analiza un mazo.</p>'; return; }
+  if (!(await aiReady(out))) return;
+  const s = A.analyze(deck), ctl = new AbortController(), d = savedDeck();
+  out.innerHTML = thinking("Claude está escribiendo la guía del mazo… suele tardar entre 20 y 60 segundos.") + '<div class="row"><button class="btn sm" id="stopG">Detener</button></div><div class="md guide" id="gmd"></div><div id="gact"></div>';
+  $("#stopG").onclick = () => ctl.abort();
+  const prompt = `Escribe la guía de este mazo de Commander para que otra persona sepa jugarlo bien. Usa estos apartados como títulos "## " y, dentro, párrafos cortos y viñetas:
+## En una frase
+## Cómo gana el mazo
+## Qué buscar en el mulligan
+## Primeros turnos (1-3)
+## Medio juego
+## Cómo cerrar la partida
+## Cartas clave
+## Combos y sinergias
+## Ojo con…
+## Consejos para jugarlo
+Escribe los títulos exactamente así, sin añadir nada entre paréntesis. En «Cartas clave» pon de 5 a 8 cartas, cada una con por qué importa. En «Ojo con…», las amenazas y mesas que le cuestan y cómo jugar contra ellas.
+Nombra cartas concretas de la lista con su nombre en inglés. Sé claro y práctico; entre 600 y 900 palabras. No inventes cartas que no estén en la lista.
+
+${deckBrief(s)}`;
+  let text = "";
+  try {
+    const r = await AI.ask(prompt, { signal: ctl.signal, effort: "medium", action: "guia", onText: ({ text: t }) => { out.querySelector(".status")?.remove(); $("#gmd").innerHTML = mdHTML(t); } });
+    text = r.text;
+  } catch (e) {
+    out.querySelector(".status")?.remove();
+    if (e.code !== "cancelled") { if (e.text) $("#gmd").innerHTML = mdHTML(e.text); out.insertAdjacentHTML("afterbegin", `<p class="no">${esc(AI.errMsg(e))}</p>`); }
+    text = e.text || "";
+  }
+  $("#stopG")?.parentElement.remove();
+  if (!text.trim()) return;
+  lastGuide = text;
+  $("#gact").innerHTML = `<div class="row" style="margin-top:8px"><button class="btn sm" data-guide="copy">Copiar guía</button>${d ? `<button class="btn sm primary" data-guide="save">Guardar con «${esc(d.name)}»</button>` : '<span class="muted small">Guarda el mazo en Mis mazos para guardar la guía con él (y que se vea en el enlace compartido).</span>'}</div>`;
+};
+$("#aiOut").addEventListener("click", e => {
+  const b = e.target.closest("[data-guide]"); if (!b) return;
+  if (b.dataset.guide === "copy") navigator.clipboard.writeText(lastGuide).then(() => toast("Guía copiada"), () => toast("No se pudo copiar"));
+  else if (b.dataset.guide === "save") { const d = savedDeck(); if (d && Decks.setGuide(d.id, lastGuide)) { toast("Guía guardada con el mazo"); b.disabled = true; b.textContent = "Guardada"; renderSavedNote(); } }
+});
+const guideDlg = $("#guideDlg");
+function openGuide(id) {
+  const d = Decks.get(id); if (!d || !d.guide) return;
+  const old = d.guide.forText && d.guide.forText !== d.text;
+  $("#guideBody").innerHTML = `<div class="row between"><h3 style="margin:0">Guía de «${esc(d.name)}»</h3><button class="btn sm" data-gd="close">Cerrar</button></div>
+    <p class="muted small" style="margin:0">Escrita con IA el ${new Date(d.guide.at).toLocaleDateString("es-ES")}.${old ? ' <span class="lo">El mazo ha cambiado desde entonces: puedes generarla de nuevo en Analizar con «Guía del mazo».</span>' : ""}</p>
+    <div class="md guide">${mdHTML(d.guide.text)}</div>
+    <div class="row"><button class="btn sm" data-gd="copy">Copiar guía</button><button class="btn sm danger" data-gd="del">Borrar guía</button></div>`;
+  guideDlg.dataset.deck = id; guideDlg.showModal();
+}
+guideDlg.addEventListener("click", e => {
+  if (e.target === guideDlg) { guideDlg.close(); return; }
+  const b = e.target.closest("[data-gd]"); if (!b) return;
+  const d = Decks.get(guideDlg.dataset.deck);
+  if (b.dataset.gd === "close") guideDlg.close();
+  else if (b.dataset.gd === "copy" && d && d.guide) navigator.clipboard.writeText(d.guide.text).then(() => toast("Guía copiada"), () => toast("No se pudo copiar"));
+  else if (b.dataset.gd === "del" && d && confirm("¿Borrar la guía de este mazo?")) { Decks.setGuide(d.id, ""); guideDlg.close(); renderDecks(); renderSavedNote(); toast("Guía borrada"); }
+});
+
 /* ---------- Construir ---------- */
 let bCmds = [null, null];
 function showCmdPreview() {
@@ -1157,6 +1250,7 @@ function ownedNote(o, cards) {
     + (o.ownedMode === "only" && lands > 42 ? ` <span class="lo">Tu colección no da para más cartas de juego en estos colores, así que el resto son tierras básicas (${lands} tierras): añade cartas a mano o usa «Primero las que tengo».</span>` : "");
 }
 function loadBuilt(cmds, cards, note, id = null) {
+  userDeck = true;
   deck = { cmds, cards, unknown: [], illegal: [] }; setDeckId(id); syncText(); render();
   $("#aiOut").innerHTML = note ? `<div>${note}</div>` : "";
   location.hash = "analizar";
@@ -1348,7 +1442,7 @@ $("#btnInstall").onclick = async () => {
   if (isIOS) alert(["Para instalar Forja EDH en tu iPhone o iPad:", "", "1. Abre esta web en Safari.", "2. Pulsa el botón Compartir (el cuadrado con la flecha hacia arriba).", "3. Elige «Añadir a pantalla de inicio»."].join(String.fromCharCode(10)));
 };
 
-initShared({ esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck });
+initShared({ esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck, mdHTML });
 initGoldfish({ esc, toast, getDeck: () => deck });
 initCompare({
   esc, pipsHTML, manaHTML, thinking, buildDeck,
@@ -1380,7 +1474,7 @@ initGuided({
   const saved = store.get("forja-deck");
   if (saved && saved.trim()) {
     $("#deckText").value = saved;
-    await loadFromText(saved); setCmdInputs();
+    await loadFromText(saved, [], { boot: true }); if (!userDeck) setCmdInputs();
   } else {
     $("#loadStatus").innerHTML = '<span class="spin"></span><span>Preparando un mazo de ejemplo…</span>';
     try {
@@ -1388,8 +1482,8 @@ initGuided({
       const ex = SF.cached("Edgar Markov");
       if (ex) {
         const cards = await autoFill({ cmds: [ex], bracket: 3, budget: 0, theme: "" }, new Map(), $("#loadStatus"));
-        deck = { cmds: [ex], cards, unknown: [], illegal: [] }; syncText();
-        $("#aiOut").innerHTML = '<p class="muted" style="margin:0">Lista de ejemplo: un mazo automático de Edgar Markov. Pega la tuya arriba y pulsa «Analizar mazo».</p>';
+        if (!userDeck) { deck = { cmds: [ex], cards, unknown: [], illegal: [] }; syncText(); }
+        if (!userDeck) $("#aiOut").innerHTML = '<p class="muted" style="margin:0">Lista de ejemplo: un mazo automático de Edgar Markov. Pega la tuya arriba y pulsa «Analizar mazo».</p>';
       }
       $("#loadStatus").innerHTML = "";
     } catch (e) { $("#loadStatus").innerHTML = `<span class="no">No se pudo conectar con Scryfall. Comprueba tu conexión.</span>`; }

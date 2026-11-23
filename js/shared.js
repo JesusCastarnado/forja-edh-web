@@ -42,7 +42,7 @@ export async function showShared(id) {
   try { sh.deck = await H.buildDeck(d.text); }
   catch { if (my === sh.seq) root.innerHTML = msg("No se pudo consultar Scryfall", "Comprueba la conexión y recarga la página."); return; }
   if (my !== sh.seq) return;
-  sh.name = d.name; sh.author = d.author || ""; sh.pub = !!d.published;
+  sh.name = d.name; sh.author = d.author || ""; sh.pub = !!d.published; sh.guide = d.guide && d.guide.text ? d.guide : null;
   renderAll();
 }
 const msg = (t, p) => `<div class="hero"><h2>${t}.</h2><p>${p}</p></div><p><a class="btn" href="#analizar" style="text-decoration:none">Ir a Forja EDH</a></p>`;
@@ -57,6 +57,7 @@ function renderAll() {
       <div style="min-width:0"><div class="gname">${d.cmds.map(c => `<button class="cn" data-name="${e(c.name)}">${e(c.name)}</button>`).join(" + ") || "Sin comandante"}</div><div class="muted small">${H.pipsHTML(s.ci)}</div></div>
       <div class="gstats"><div><span class="eyebrow">Cartas</span><b>${s.total}</b></div><div><span class="eyebrow">Precio</span><b>${money(s.price)}</b></div><div><span class="eyebrow">Coste medio</span><b>${s.avgCmc.toFixed(2)}</b></div><div><span class="eyebrow">Bracket</span><b>B${s.bracket}</b></div></div>
     </div>
+    ${sh.guide ? `<details class="panel sguide"><summary><b>Guía del mazo</b> <span class="muted small">· cómo jugarlo, escrita con IA</span></summary><div class="md guide">${H.mdHTML(sh.guide.text)}</div></details>` : ""}
     <div class="scols">
       <div id="sDeck"></div>
       <aside class="panel sside" id="sSide"></aside>

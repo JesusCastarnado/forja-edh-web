@@ -59,6 +59,9 @@ Además:
 
 - **Optimizar con IA**: lee cómo está montado el mazo y qué pide el comandante, te deja elegir el estilo (reforzar el actual, otro arquetipo o «a mi manera») y el **presupuesto de la mejora** (lo máximo que quieres gastar sumando las cartas nuevas), y propone cortes y añadidos. Cada añadido muestra su precio y su sinergia; los que se pasan del presupuesto se descartan. Cada añadido se comprueba en Scryfall: que exista, que sea legal y que esté en tu identidad de color.
 - **Radiografía**: plan de juego, cómo se juega cada fase, mulligan, puntos débiles y combos.
+- **Guía del mazo** (IA): una guía para compartir, más completa que la Radiografía: el mazo en una frase, cómo gana, mulligan, primeros turnos, medio juego, cómo cerrar, cartas clave, combos, qué le cuesta y consejos. Puedes **copiarla** o, si el mazo está en Mis mazos, **guardarla con él**: entonces se ve en Mis mazos (botón «Guía»), en Analizar («Ver su guía») y en el **enlace compartido**, para que tus amigos sepan jugarlo. Si cambias el mazo, la guía avisa de que es de una versión anterior.
+- **Importar por enlace**: pega en el cuadro de la lista el enlace de un mazo público de **Archidekt** y pulsa «Analizar mazo»: se trae solo, con su comandante (sin sideboard ni maybeboard). **Moxfield** no deja leer sus mazos desde otras webs, así que al pegar un enlace suyo te explica cómo copiarlo: en Moxfield, «Export» → «Copy for MTGA», y pegar la lista.
+- **Copiar lista** en el formato que quieras: *para Moxfield / Arena* (secciones Commander y Deck), *para Archidekt* (`1x Carta` con la etiqueta `[Commander]`) o *texto simple* (`*CMDR*` en el comandante).
 - **Sugerencias rápidas** (sin IA): rellena lo que le falta al esqueleto con las cartas más jugadas en tus colores.
 - **A presupuesto**: escribes un precio máximo («déjamelo en 100 €») y propone cambios carta por carta, de la más cara a la más barata, hasta bajar de esa cifra. Sin IA cambia cada carta por una de las más jugadas que cumple la misma función (ramp por ramp, robo por robo, una criatura del tema por otra del tema…) y cuesta mucho menos; con IA, Claude elige los cambios pensando en la sinergia, y la web comprueba que cada cambio sea legal, esté en tus colores y salga más barato. Nada se aplica hasta que pulsas «Cambiar» o «Aplicar todos».
 - **Novedades para tu mazo**: cartas nuevas (no reimpresiones) de los últimos 5 meses en tus colores, previews incluidas. Primero salen las que encajan con tu comandante, con la razón: «Sinergia +X %» (EDHREC) o su tema, por ejemplo «Tema «vampire»» (la tribu del comandante manda sobre temas genéricos como las fichas). Después, el resto de novedades.
@@ -112,7 +115,7 @@ También sirve para **editar mazos que ya tienes**: desde Analizar o desde Mis m
 
 Tus mazos guardados, cada uno con el arte del comandante, sus colores, cartas, precio, bracket, nota y fecha.
 
-- **Añadir**: «+ Crear mazo» (te lleva a Paso a paso para elegir comandante), «Pegar lista», «Importar archivo» (.txt de Moxfield, Archidekt o ManaBox, varios a la vez, o una copia .json) o guardando desde Analizar / Paso a paso.
+- **Añadir**: «+ Crear mazo» (te lleva a Paso a paso para elegir comandante), «Pegar lista» (también admite el enlace de un mazo de Archidekt), «Importar archivo» (.txt de Moxfield, Archidekt o ManaBox, varios a la vez, o una copia .json) o guardando desde Analizar / Paso a paso.
 - **En cada mazo**: Abrir, Editar paso a paso, Copiar lista, Renombrar, Duplicar y Borrar.
 - **Historial de versiones**: cada vez que guardas un mazo con cambios en la lista, la versión anterior se guarda en su historial (las últimas 20, también en la nube). El botón **Historial** de cada mazo muestra las versiones con su fecha, qué cartas entraron y salieron en cada una y, si las hay, notas como «Sugerencias de Pablo». Desde cada versión puedes **Comparar con la actual** (abre la pestaña Comparar) o **Restaurarla**; la versión que había pasa al historial, así que también se puede deshacer.
 - **Buscar** por nombre o comandante.
@@ -333,6 +336,7 @@ js/colview.js         pestaña «Colección» y panel «Tu colección» de Anali
 js/decks.js           «Mis mazos» en el navegador
 js/cloud.js           sincronización de «Mis mazos» y de la colección con Supabase, inicio de sesión, compartir y sugerencias
 js/shared.js          vista del mazo compartido (#compartido/…) para sugerir cambios
+js/exchange.js        importar por enlace (Archidekt) y exportar con el formato de cada web
 js/changelog.js       lista de «Novedades» (lo último añadido, para quien visita la web)
 js/admin.js           pantalla Admin (#admin): acceso a la IA y consumo
 manifest.json         datos de la app instalable (nombre, colores, iconos)
@@ -341,6 +345,7 @@ icons/                iconos de la app
 js/config.js          URL y clave publicable de Supabase (vacías = sin nube)
 supabase/schema.sql   tablas (mazos, sugerencias y colección), reglas de seguridad y funciones para compartir y para la comunidad
 api/claude.js         función de Vercel que llama a Claude con el SDK oficial
+api/archidekt.js      función de Vercel: puente con la API pública de Archidekt para importar mazos
 api/combos.js         función de Vercel que consulta Commander Spellbook (su API no admite llamadas desde el navegador)
 api/edhrec.js         función de Vercel que lee los datos de EDHREC de cada comandante (tampoco admite llamadas desde el navegador)
 dev/serve.ps1         servidor local: sirve la web y hace de /api/claude (con Claude Code), /api/combos y /api/edhrec

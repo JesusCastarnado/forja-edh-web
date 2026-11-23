@@ -59,13 +59,16 @@ create policy "Gestionar sugerencias de mis mazos" on public.suggestions for upd
 drop policy if exists "Borrar sugerencias de mis mazos" on public.suggestions;
 create policy "Borrar sugerencias de mis mazos" on public.suggestions for delete to authenticated using (owner = auth.uid());
 
--- Leer un mazo compartido (nombre, comandantes, lista, estadísticas y, si está en la comunidad, el autor;
+-- Guía del mazo escrita con IA ({ text, at, forText }); se ve en el enlace compartido.
+alter table public.decks add column if not exists guide jsonb;
+
+-- Leer un mazo compartido (nombre, comandantes, lista, estadísticas, guía y, si está en la comunidad, el autor;
 -- nada de la cuenta del dueño). Se borra y se crea de nuevo porque lo que devuelve ha cambiado con el tiempo.
 drop function if exists public.shared_deck(uuid);
 create function public.shared_deck(p_share uuid)
-returns table (name text, cmds jsonb, text text, stats jsonb, updated bigint, author text, published boolean)
+returns table (name text, cmds jsonb, text text, stats jsonb, updated bigint, author text, published boolean, guide jsonb)
 language sql stable security definer set search_path = public as $$
-  select d.name, d.cmds, d.text, d.stats, d.updated, d.author, d.published
+  select d.name, d.cmds, d.text, d.stats, d.updated, d.author, d.published, d.guide
   from public.decks d where d.share_id = p_share and not d.deleted limit 1;
 $$;
 

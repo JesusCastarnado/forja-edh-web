@@ -128,6 +128,26 @@ function Invoke-Combos($ctx) {
   }
 }
 
+# Archidekt: importar un mazo público por su número (como api/archidekt.js en Vercel). Solo lee archidekt.com.
+function Invoke-Archidekt($ctx) {
+  $res = $ctx.Response
+  $id = [string]$ctx.Request.QueryString['id']
+  $res.ContentType = 'application/json; charset=utf-8'
+  if ($id -notmatch '^\d{1,12}$') { $res.StatusCode = 400; Send-Json $res @{ error = 'Enlace de Archidekt no válido' }; return }
+  try {
+    $wc = New-Object Net.WebClient
+    $wc.Encoding = $utf8
+    $wc.Headers.Add('User-Agent', 'ForjaEDH/1.0 (importador de mazos)')
+    $wc.Headers.Add('Accept', 'application/json')
+    $txt = $wc.DownloadString("https://archidekt.com/api/decks/$id/")
+    $b = $utf8.GetBytes($txt)
+    $res.OutputStream.Write($b, 0, $b.Length)
+  } catch {
+    $res.StatusCode = 404
+    Send-Json $res @{ error = 'Ese mazo de Archidekt no existe o es privado' }
+  }
+}
+
 # EDHREC: datos de cada comandante (como api/edhrec.js en Vercel). Solo lee json.edhrec.com.
 function Invoke-Edhrec($ctx) {
   $res = $ctx.Response
@@ -167,6 +187,8 @@ while ($l.IsListening) {
   try {
     if ($path -eq 'api/edhrec') {
       if ($ctx.Request.HttpMethod -eq 'GET') { Invoke-Edhrec $ctx } else { $ctx.Response.StatusCode = 405 }
+    } elseif ($path -eq 'api/archidekt') {
+      if ($ctx.Request.HttpMethod -eq 'GET') { Invoke-Archidekt $ctx } else { $ctx.Response.StatusCode = 405 }
     } elseif ($path -eq 'api/combos') {
       $origin = $ctx.Request.Headers['Origin']
       if ($ctx.Request.HttpMethod -ne 'POST') { $ctx.Response.StatusCode = 405 }

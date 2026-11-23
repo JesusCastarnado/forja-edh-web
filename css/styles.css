@@ -586,3 +586,12 @@ header.top{padding-top:max(14px, env(safe-area-inset-top, 0px))}
    así que la cabecera baja un poco más para quedar fuera. En el navegador no cambia nada. */
 @media (display-mode: standalone){ header.top{padding-top:calc(env(safe-area-inset-top, 0px) + 16px)} }
 html.standalone header.top{padding-top:calc(env(safe-area-inset-top, 0px) + 16px)}
+
+/* ---------- Guía del mazo ---------- */
+.md.guide h4{font-family:var(--f-display);font-weight:400;font-size:18px;margin:14px 0 4px;color:var(--accent)}
+.md.guide p{margin:6px 0}
+.md.guide ul{margin:4px 0;padding-left:20px}
+dialog .md.guide{max-height:60vh;overflow:auto;padding-right:6px}
+.sguide{margin-bottom:16px}
+.sguide summary{cursor:pointer}
+.sguide[open] summary{margin-bottom:6px}
