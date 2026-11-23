@@ -1273,6 +1273,7 @@ initAdmin({ esc, toast, thinking });
 // Android y ordenadores con Chrome/Edge avisan de que se puede instalar; en iPhone/iPad hay que
 // hacerlo desde el botón Compartir de Safari, así que allí el botón explica cómo.
 const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+if (standalone) document.documentElement.classList.add("standalone"); // para los estilos de la app instalada
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 let installEvt = null;
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("/sw.js").catch(() => {});

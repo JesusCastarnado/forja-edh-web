@@ -582,3 +582,7 @@ nav.tabs a{white-space:nowrap}
 header.top{padding-top:max(14px, env(safe-area-inset-top, 0px))}
 @media (max-width:700px){ header.top{padding-top:max(8px, env(safe-area-inset-top, 0px))} }
 .toast{bottom:calc(20px + env(safe-area-inset-bottom, 0px))}
+/* Solo en la app instalada (abierta desde el icono): iOS difumina una franja bajo la barra de la hora,
+   así que la cabecera baja un poco más para quedar fuera. En el navegador no cambia nada. */
+@media (display-mode: standalone){ header.top{padding-top:calc(env(safe-area-inset-top, 0px) + 16px)} }
+html.standalone header.top{padding-top:calc(env(safe-area-inset-top, 0px) + 16px)}
