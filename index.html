@@ -23,6 +23,7 @@
       <a href="#coleccion" data-view="coleccion">Colección</a>
       <a href="#mano" data-view="mano">Probar mano</a>
     </nav>
+    <a class="btn sm newsbtn" href="#admin" id="btnAdmin" hidden title="Solo tú ves esto">Admin</a>
     <a class="btn sm newsbtn" href="#novedades" id="btnNews" title="Lo último que se ha añadido">Novedades<span class="nbadge" id="newsBadge" hidden></span></a>
     <select id="currency" class="cursel" aria-label="Moneda de los precios" title="Moneda de los precios"><option value="usd">$ USD</option><option value="eur">€ EUR</option></select>
     <button class="btn sm" id="btnPass" hidden>Clave IA</button>
@@ -354,6 +355,15 @@
 </section>
 
 <!-- ===================== MANO ===================== -->
+<!-- ===================== ADMIN (solo administradores) ===================== -->
+<section id="view-admin" hidden>
+  <div class="hero">
+    <h2>Admin.</h2>
+    <p>Solo tú ves esta pantalla: quién puede usar la IA en la web publicada y cuánto se gasta.</p>
+  </div>
+  <div id="admBody"></div>
+</section>
+
 <!-- ===================== NOVEDADES ===================== -->
 <section id="view-novedades" hidden>
   <div class="hero">

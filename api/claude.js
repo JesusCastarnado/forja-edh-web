@@ -3,8 +3,10 @@
 // Respuesta en NDJSON: {"t":"texto"} por cada trozo, y al final {"done":true,"stop":"end_turn"} o {"error":"...","code":"..."}.
 //
 // Quién puede usarla (variables de entorno en Vercel):
-//   ALLOWED_EMAILS  emails (o ids de usuario de Supabase) separados por comas. La web manda la sesión
-//                   de «Mis mazos» y aquí se comprueba con Supabase que es una de esas cuentas.
+//   ALLOWED_EMAILS  administradores: emails (o ids de usuario de Supabase) separados por comas. La web manda
+//                   la sesión de «Mis mazos» y aquí se comprueba con Supabase que es una de esas cuentas.
+//                   Además pueden usarla las personas a las que des acceso en la pantalla Admin (tabla
+//                   ai_access de Supabase), sin tocar Vercel.
 //   APP_PASSWORD    alternativa: una contraseña que la web pide con el botón «Clave IA».
 // Si no hay ninguna de las dos, la función se niega a usar la clave: así nadie puede gastar tu saldo
 // por olvidar protegerla.
@@ -18,7 +20,7 @@ const samePass = (a, b) => timingSafeEqual(sha(a), sha(b));
 
 const ALLOWED = (process.env.ALLOWED_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
-// Pregunta a Supabase de quién es la sesión. Devuelve { id, email } o null si no es válida.
+// Pregunta a Supabase de quién es la sesión. Devuelve { id, email, token } o null si no es válida.
 async function sessionUser(req) {
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || "");
   if (!m || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
@@ -26,22 +28,42 @@ async function sessionUser(req) {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${m[1]}` } });
     if (!r.ok) return null;
     const u = await r.json();
-    return u && u.id ? { id: String(u.id).toLowerCase(), email: String(u.email || "").toLowerCase() } : null;
+    return u && u.id ? { id: String(u.id).toLowerCase(), email: String(u.email || "").toLowerCase(), token: m[1] } : null;
   } catch { return null; }
 }
+// Llama a una función de Supabase como la persona de la sesión (las reglas de la base de datos deciden).
+async function rpc(name, token, body = {}) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+    method: "POST", signal: AbortSignal.timeout(5000),
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`Supabase ${name}: ${r.status}`);
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
 
-// null si puede pasar; si no, { status, error, code }.
+// { user } si puede pasar (user es null en el modo de contraseña); si no, { denied: { status, error, code } }.
 async function checkAccess(req) {
   if (ALLOWED.length) {
     const u = await sessionUser(req);
-    if (u && (ALLOWED.includes(u.email) || ALLOWED.includes(u.id))) return null;
-    if (!u && !process.env.APP_PASSWORD) return { status: 401, error: "Entra con tu cuenta en «Mis mazos» para usar la IA", code: "login_required" };
-    if (u && !process.env.APP_PASSWORD) return { status: 403, error: "Esta cuenta no tiene acceso a la IA", code: "not_allowed" };
+    if (u && (ALLOWED.includes(u.email) || ALLOWED.includes(u.id))) return { user: u };
+    if (u && (await rpc("ai_allowed", u.token).catch(() => false)) === true) return { user: u };
+    if (!u && !process.env.APP_PASSWORD) return { denied: { status: 401, error: "Entra con tu cuenta en «Mis mazos» para usar la IA", code: "login_required" } };
+    if (u && !process.env.APP_PASSWORD) return { denied: { status: 403, error: "Esta cuenta no tiene acceso a la IA", code: "not_allowed" } };
   }
   if (process.env.APP_PASSWORD) {
-    return samePass(req.headers["x-app-password"], process.env.APP_PASSWORD) ? null : { status: 401, error: "Contraseña incorrecta", code: "auth" };
+    return samePass(req.headers["x-app-password"], process.env.APP_PASSWORD) ? { user: null } : { denied: { status: 401, error: "Contraseña incorrecta", code: "auth" } };
   }
-  return ALLOWED.length ? null : { status: 503, error: "La IA no está protegida: añade ALLOWED_EMAILS (o APP_PASSWORD) en Vercel", code: "unprotected" };
+  return { denied: { status: 503, error: "La IA no está protegida: añade ALLOWED_EMAILS (o APP_PASSWORD) en Vercel", code: "unprotected" } };
+}
+
+// Precio por millón de tokens (entrada, salida) en dólares, para el panel de consumo.
+const PRICES = { haiku: [0.10, 0.50], sonnet: [2, 10], opus: [4, 20] };
+function costOf(model, usage) {
+  const [pin, pout] = PRICES[(/haiku|sonnet|opus/.exec(String(model)) || ["opus"])[0]];
+  const tin = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
+  return { tin, tout: usage.output_tokens || 0, cost: (tin * pin + (usage.output_tokens || 0) * pout) / 1e6 };
 }
 
 const client = new Anthropic(); // lee ANTHROPIC_API_KEY del entorno
@@ -65,10 +87,11 @@ export default async function handler(req, res) {
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
   if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "Falta ANTHROPIC_API_KEY en el servidor", code: "not_configured" });
-  const denied = await checkAccess(req);
+  const { denied, user } = await checkAccess(req);
   if (denied) return res.status(denied.status).json({ error: denied.error, code: denied.code });
 
   const { prompt, effort } = req.body || {};
+  const action = /^[a-z_]{1,30}$/.test(String((req.body || {}).action || "")) ? req.body.action : "otro";
   if (typeof prompt !== "string" || !prompt.trim() || prompt.length > MAX_PROMPT) {
     return res.status(400).json({ error: "Petición no válida", code: "bad_request" });
   }
@@ -96,6 +119,11 @@ export default async function handler(req, res) {
     }
     const msg = await stream.finalMessage();
     send({ done: true, stop: msg.stop_reason });
+    // Apunta el consumo para el panel Admin (si falla, la respuesta ya se ha enviado igual).
+    if (user && msg.usage) {
+      const { tin, tout, cost } = costOf(msg.model || MODEL, msg.usage);
+      await rpc("log_ai_usage", user.token, { p_action: action, p_model: msg.model || MODEL, p_in: tin, p_out: tout, p_cost: Number(cost.toFixed(6)) }).catch(e => console.error(e));
+    }
   } catch (err) {
     if (gone) return;
     let code = "upstream", error = "Error al hablar con Claude";

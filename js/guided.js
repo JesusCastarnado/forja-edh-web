@@ -356,7 +356,7 @@ Responde SOLO con JSON, con esta forma exacta:
 {"veredicto":"si|depende|no","resumen":"1-2 frases claras con la conclusión","a_favor":["2-4 razones cortas"],"en_contra":["0-4 razones cortas"],"cortar":[{"carta":"Nombre exacto en inglés","motivo":"breve"}],"alternativas":[{"carta":"Nombre exacto en inglés","motivo":"breve: por qué es mejor o qué aporta"}]}
 Reglas: valora la sinergia con el comandante, la curva, el nivel de poder (bracket) y qué hueco cubre. "cortar": ${inDeck ? "déjalo vacío" : `1-3 cartas de la lista que sacarías para meterla${total() + st.cmds.length < 100 ? " (puede ir vacío si aún hay sitio en el mazo)" : ""}`}. "alternativas": 0-3 cartas que no estén en la lista, legales en Commander y dentro de la identidad ${ci || "incolora"}, solo si el veredicto es "depende" o "no".${st.maxPrice ? ` Las alternativas deben costar como máximo ${st.maxPrice} ${currencyName()} cada una.` : ""}`;
   try {
-    const r = await AI.askJSON(prompt, { effort: "low" });
+    const r = await AI.askJSON(prompt, { effort: "low", action: "encaja" });
     const cutsRaw = Array.isArray(r.cortar) ? r.cortar : [], altsRaw = Array.isArray(r.alternativas) ? r.alternativas : [];
     await SF.collection([...cutsRaw, ...altsRaw].map(x => String(x.carta || "")), { fuzzyLimit: 6 }).catch(() => {});
     const cuts = cutsRaw.map(x => ({ ...x, c: SF.cached(String(x.carta || "")) })).filter(x => x.c && st.cards.has(A.key(x.c)));
@@ -443,7 +443,7 @@ ${st.maxPrice ? `Presupuesto: cada carta debe costar como máximo ${st.maxPrice}
 Elige exactamente ${g.nonlandNeed} cartas que no sean tierra y ${nonbasic} tierras no básicas. Primero cubre los huecos de cada categoría; el resto, cartas que aprovechen el comandante y las sinergias de las cartas que ya ha puesto (tribus, tipos, mecánicas que se repiten). Sin cartas repetidas ni ya presentes en la lista, todas legales en Commander y dentro de la identidad ${ci || "incolora"}, con su nombre oficial en inglés.
 Responde SOLO con JSON, con esta forma exacta:
 {"resumen":"1-2 frases: qué refuerzan estas cartas","cartas":[{"carta":"Nombre exacto en inglés","motivo":"muy breve: qué aporta o con qué de su lista combina"}]}`;
-      const r = await AI.askJSON(prompt, { effort: "medium", signal: ctl.signal, onText: ({ text }) => { const m = box.querySelector(".status .msg"); const k = (text.match(/"carta"/g) || []).length; if (m && k) m.textContent = `Eligiendo cartas… (${k} de ${g.nonlandNeed + nonbasic})`; } });
+      const r = await AI.askJSON(prompt, { effort: "medium", action: "autorrellenar", signal: ctl.signal, onText: ({ text }) => { const m = box.querySelector(".status .msg"); const k = (text.match(/"carta"/g) || []).length; if (m && k) m.textContent = `Eligiendo cartas… (${k} de ${g.nonlandNeed + nonbasic})`; } });
       const raw = (Array.isArray(r.cartas) ? r.cartas : []).map(x => ({ name: String(x.carta || "").trim(), why: String(x.motivo || "") })).filter(x => x.name);
       box.innerHTML = H.thinking("Comprobando las cartas en Scryfall…");
       await SF.collection(raw.map(x => x.name), { fuzzyLimit: 15 }).catch(() => {});

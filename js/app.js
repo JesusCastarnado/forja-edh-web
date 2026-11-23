@@ -3,6 +3,7 @@ import * as A from "./analysis.js";
 import * as AI from "./ai.js";
 import { initGuided, showGuided, editInGuided, newDeck } from "./guided.js";
 import { CHANGELOG } from "./changelog.js";
+import { initAdmin, showAdmin } from "./admin.js";
 import * as Decks from "./decks.js";
 import * as Cloud from "./cloud.js";
 import { initShared, showShared } from "./shared.js";
@@ -776,7 +777,7 @@ ${synergyBrief(edh, deck.cmds, deck.cards, { max: 20 })}
 Responde SOLO con JSON, con esta forma exacta:
 {"comandante":"1-2 frases: qué quiere hacer este comandante y cómo se le saca partido","estilo_actual":{"nombre":"nombre corto del arquetipo (p. ej. Aristócratas, Fichas, Voltron, Control, Combo)","descripcion":"1-2 frases sobre cómo gana y juega el mazo tal como está","cartas_clave":["5-8 cartas de la lista que definen ese estilo"]},"fuera_de_estilo":["hasta 8 cartas de la lista que no encajan con el estilo ni con el comandante"],"opciones":[{"nombre":"nombre corto","descripcion":"1 frase: cómo jugaría y qué cambia respecto al actual"}]}
 "opciones" son 3 estilos distintos y viables para este comandante; el primero es reforzar el estilo actual. En "fuera_de_estilo" incluye sobre todo staples genéricos sin sinergia con el comandante.`;
-  try { diag = await AI.askJSON(prompt, { effort: "low" }); renderDiag(diag); }
+  try { diag = await AI.askJSON(prompt, { effort: "low", action: "optimizar" }); renderDiag(diag); }
   catch (e) { out.innerHTML = `<p class="no">${esc(AI.errMsg(e))}</p>`; }
   finally { btn.disabled = false; }
 };
@@ -826,7 +827,7 @@ Responde SOLO con JSON, con esta forma exacta:
 {"resumen":"2-3 frases: cómo jugará el mazo después de los cambios","cortes":[{"carta":"Nombre exacto en inglés","motivo":"breve, por qué no sirve a ese estilo"}],"anadidos":[{"carta":"Nombre exacto en inglés","motivo":"breve, qué aporta a ese estilo y con el comandante","categoria":"motor|sinergia|remate|ramp|robo|removal|barrido|proteccion|tierra"}]}
 Reglas: entre ${depth - 2} y ${depth} cortes y el mismo número de añadidos. Los cortes deben estar en la lista. Los añadidos deben ser legales en Commander, dentro de la identidad de color ${s.ci || "incolora"}, no estar ya en la lista, y usar el nombre oficial en inglés.`;
   try {
-    const r = await AI.askJSON(prompt, { onText: ({ text }) => { const m = out.querySelector(".status .msg"); const n = (text.match(/"carta"/g) || []).length; if (m && n) m.textContent = `Escribiendo propuestas… (${n})`; } });
+    const r = await AI.askJSON(prompt, { action: "optimizar", onText: ({ text }) => { const m = out.querySelector(".status .msg"); const n = (text.match(/"carta"/g) || []).length; if (m && n) m.textContent = `Escribiendo propuestas… (${n})`; } });
     await renderOpt(r, s, style.nombre, { budget, edh });
   } catch (e) {
     out.innerHTML = `<p class="no">${esc(AI.errMsg(e))}</p><div class="row"><button class="btn" id="backStyle">Volver a los estilos</button></div>`;
@@ -948,7 +949,7 @@ Responde SOLO con JSON, con esta forma exacta:
 {"resumen":"1-2 frases sobre cómo queda el mazo","cambios":[{"quitar":"Nombre exacto en inglés","poner":"Nombre exacto en inglés","motivo":"breve: qué función cumple igual"}]}
 Reglas: "quitar" debe estar en la lista. "poner" debe ser legal en Commander, estar dentro de la identidad de color ${s.ci || "incolora"}, no estar ya en la lista y costar menos de la mitad que la carta que sustituye.`;
   try {
-    const r = await AI.askJSON(prompt, { effort: "medium" });
+    const r = await AI.askJSON(prompt, { effort: "medium", action: "presupuesto" });
     const raw = Array.isArray(r.cambios) ? r.cambios : [];
     await SF.collection(raw.flatMap(x => [String(x.quitar || ""), String(x.poner || "")]), { fuzzyLimit: 10 }).catch(() => {});
     const used = new Set(), list = []; let total = s.price, dropped = 0;
@@ -1020,7 +1021,7 @@ $("#btnXray").onclick = async () => {
   $("#stopX").onclick = () => ctl.abort();
   const prompt = `Escribe una radiografía de este mazo de Commander, con estos apartados como títulos "## ": Plan de juego, Cómo se juega (turnos 1-3, medio juego, cierre), Qué buscar en el mulligan, Puntos débiles, Contra qué mesas sufre, Combos y sinergias clave. Usa viñetas cortas y nombra cartas concretas de la lista. Sé directo y práctico, unas 400 palabras.\n\n${deckBrief(s)}`;
   try {
-    await AI.ask(prompt, { signal: ctl.signal, effort: "low", onText: ({ text }) => { out.querySelector(".status")?.remove(); $("#xmd").innerHTML = mdHTML(text); } });
+    await AI.ask(prompt, { signal: ctl.signal, effort: "low", action: "radiografia", onText: ({ text }) => { out.querySelector(".status")?.remove(); $("#xmd").innerHTML = mdHTML(text); } });
   } catch (e) {
     out.querySelector(".status")?.remove();
     if (e.code !== "cancelled") { if (e.text) $("#xmd").innerHTML = mdHTML(e.text); out.insertAdjacentHTML("afterbegin", `<p class="no">${esc(AI.errMsg(e))}</p>`); }
@@ -1100,7 +1101,7 @@ Responde SOLO con JSON con esta forma exacta:
 {"nombre":"nombre corto del mazo","estrategia":"2-3 frases","cartas":["Sol Ring","Command Tower","..."],"basicas":{"Forest":10}}
 "cartas" son las cartas no básicas, cada una una sola vez, con el nombre oficial en inglés, sin el comandante. "basicas" son las tierras básicas y cuántas de cada una. cartas + basicas deben sumar exactamente ${100 - o.cmds.length}. Todas legales en Commander y dentro de la identidad de color.`;
   try {
-    const r = await AI.askJSON(prompt, { signal: ctl.signal, effort: "medium", onText: ({ text }) => { const m = st.querySelector(".msg"); const n = (text.match(/",/g) || []).length; if (m && n > 2) m.textContent = `Escribiendo la lista… (${n} cartas)`; } });
+    const r = await AI.askJSON(prompt, { signal: ctl.signal, effort: "medium", action: "generar", onText: ({ text }) => { const m = st.querySelector(".msg"); const n = (text.match(/",/g) || []).length; if (m && n > 2) m.textContent = `Escribiendo la lista… (${n} cartas)`; } });
     st.querySelector(".msg") && (st.querySelector(".msg").textContent = "Comprobando las cartas en Scryfall…");
     const names = (Array.isArray(r.cartas) ? r.cartas : []).map(String);
     const basicsObj = r.basicas && typeof r.basicas === "object" ? r.basicas : {};
@@ -1170,7 +1171,7 @@ function askName(title, value, label = "Nombre del mazo") {
 /* ---------- navegación ---------- */
 let cmdsLoaded = false;
 function route() {
-  const views = ["analizar", "construir", "guiado", "mazos", "comparar", "coleccion", "mano", "novedades"];
+  const views = ["analizar", "construir", "guiado", "mazos", "comparar", "coleccion", "mano", "novedades", "admin"];
   const h = location.hash.slice(1);
   // Enlace de un mazo compartido: #compartido/<id>
   const shared = /^compartido\/([0-9a-f-]{36})$/i.exec(h);
@@ -1186,6 +1187,8 @@ function route() {
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
   $("#btnNews").setAttribute("aria-current", v === "novedades" ? "page" : "false");
   if (v === "novedades") renderNewsPage();
+  $("#btnAdmin").setAttribute("aria-current", v === "admin" ? "page" : "false");
+  if (v === "admin") showAdmin();
   if (v === "mano") showGoldfish();
   if (v === "comparar") showCompare();
   if (v === "coleccion") showCollection();
@@ -1219,6 +1222,7 @@ function renderNewsPage() {
   updateNewsBadge();
 }
 updateNewsBadge();
+initAdmin({ esc, toast, thinking });
 
 initShared({ esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck });
 initGoldfish({ esc, toast, getDeck: () => deck });

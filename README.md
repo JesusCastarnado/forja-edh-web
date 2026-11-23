@@ -227,6 +227,15 @@ La IA publicada es **privada**: solo responde a las cuentas que pongas en `ALLOW
 
 Si no pones `ALLOWED_EMAILS` (ni `APP_PASSWORD`, la protección antigua por contraseña), la función **se niega a usar la clave**, para que nadie pueda gastar tu saldo por un olvido. La IA en local (`serve.ps1`) no cambia: sigue usando tu cuenta de Claude sin clave.
 
+### Pantalla Admin: quién tiene IA y cuánto se gasta
+
+Solo para el administrador (tú): con la sesión iniciada aparece el botón **Admin** arriba (o https://forja-edh-web.vercel.app/#admin).
+
+- **Acceso a la IA**: escribe un email y pulsa **Dar acceso**, o pulsa **Dar IA** en alguien de la lista «Gente que ha entrado en la web». Puedes **pausar** o **quitar** el acceso. Los cambios son al momento, sin tocar Vercel. Tu amigo tiene que entrar en «Mis mazos» con una cuenta que tenga ese email.
+- **Consumo**: lo gastado este mes frente a tu límite (escríbelo una vez; se recuerda), respuestas y tokens, un gráfico de gasto por día de los últimos 30 días, el gasto por persona y por función (Optimizar, Autorrellenar, ¿Encaja?…) y las últimas respuestas. El coste se calcula con los precios de la API; el dato exacto siempre está en la consola de Anthropic. Solo cuenta la IA de la web publicada.
+
+Cómo funciona por dentro: los administradores son los de `ALLOWED_EMAILS` en Vercel **y** la tabla `admins` de Supabase. El resto de personas con IA están en la tabla `ai_access`, y cada respuesta se apunta en `ai_usage` (ver `supabase/schema.sql`). Las reglas de la base de datos hacen que solo un administrador pueda ver o cambiar esas tablas, aunque alguien abra `#admin` a mano. Para añadir otro administrador: `insert into public.admins (email) values ('su@email.com');` en el SQL Editor y añadir su email a `ALLOWED_EMAILS`.
+
 Coste aproximado con Claude Opus 5.5 (4 $ por millón de tokens de entrada y 20 $ por millón de salida):
 
 | Acción | Coste aproximado |
@@ -310,6 +319,7 @@ js/decks.js           «Mis mazos» en el navegador
 js/cloud.js           sincronización de «Mis mazos» y de la colección con Supabase, inicio de sesión, compartir y sugerencias
 js/shared.js          vista del mazo compartido (#compartido/…) para sugerir cambios
 js/changelog.js       lista de «Novedades» (lo último añadido, para quien visita la web)
+js/admin.js           pantalla Admin (#admin): acceso a la IA y consumo
 js/config.js          URL y clave publicable de Supabase (vacías = sin nube)
 supabase/schema.sql   tablas (mazos, sugerencias y colección), reglas de seguridad y funciones para compartir y para la comunidad
 api/claude.js         función de Vercel que llama a Claude con el SDK oficial

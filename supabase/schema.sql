@@ -128,3 +128,79 @@ create policy "Cada uno su colección" on public.collections
 
 -- Para que la API vea al momento las tablas y funciones nuevas.
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------------------------
+-- Panel de administración: quién tiene IA en la web publicada y cuánto se gasta.
+-- Los administradores se dan de alta a mano aquí (insert into public.admins …) y además
+-- deben estar en ALLOWED_EMAILS de Vercel. Nadie más puede ver ni tocar estas tablas.
+
+create table if not exists public.admins (
+  email text primary key  -- en minúsculas
+);
+alter table public.admins enable row level security;  -- sin políticas: solo se lee desde las funciones
+
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.admins where email = lower(coalesce(auth.jwt() ->> 'email', '')));
+$$;
+
+-- Personas con acceso a la IA (además de los administradores).
+create table if not exists public.ai_access (
+  email    text primary key,              -- en minúsculas
+  note     text not null default '',
+  enabled  boolean not null default true,
+  added_at timestamptz not null default now()
+);
+alter table public.ai_access enable row level security;
+drop policy if exists "Admins gestionan el acceso a la IA" on public.ai_access;
+create policy "Admins gestionan el acceso a la IA" on public.ai_access for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+-- ¿Puede la sesión actual usar la IA? Lo pregunta api/claude.js con el token de quien llama.
+create or replace function public.ai_allowed() returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.is_admin() or exists (
+    select 1 from public.ai_access where enabled and email = lower(coalesce(auth.jwt() ->> 'email', '')));
+$$;
+
+-- Registro de consumo: una fila por cada respuesta de la IA en la web publicada.
+create table if not exists public.ai_usage (
+  id            bigint generated always as identity primary key,
+  at            timestamptz not null default now(),
+  user_id       uuid,
+  email         text not null default '',
+  action        text not null default '',
+  model         text not null default '',
+  input_tokens  int not null default 0,
+  output_tokens int not null default 0,
+  cost_usd      numeric(10, 6) not null default 0
+);
+create index if not exists ai_usage_at_idx on public.ai_usage (at desc);
+alter table public.ai_usage enable row level security;
+drop policy if exists "Admins ven el consumo" on public.ai_usage;
+create policy "Admins ven el consumo" on public.ai_usage for select to authenticated using (public.is_admin());
+
+-- Lo llama api/claude.js al terminar cada respuesta, con el token de quien usó la IA.
+create or replace function public.log_ai_usage(p_action text, p_model text, p_in int, p_out int, p_cost numeric)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.ai_allowed() then return; end if;
+  insert into public.ai_usage (user_id, email, action, model, input_tokens, output_tokens, cost_usd)
+  values (auth.uid(), lower(coalesce(auth.jwt() ->> 'email', '')), left(coalesce(p_action, ''), 40), left(coalesce(p_model, ''), 60),
+          greatest(0, coalesce(p_in, 0)), greatest(0, coalesce(p_out, 0)), greatest(0, coalesce(p_cost, 0)));
+end $$;
+
+-- Para el panel: cuentas que han entrado en la web (para darles IA con un clic).
+create or replace function public.admin_users()
+returns table (email text, created_at timestamptz, last_sign_in_at timestamptz)
+language plpgsql stable security definer set search_path = public, auth as $$
+begin
+  if not public.is_admin() then raise exception 'Solo para administradores'; end if;
+  return query select lower(u.email)::text, u.created_at, u.last_sign_in_at from auth.users u where u.email is not null order by u.last_sign_in_at desc nulls last;
+end $$;
+
+revoke execute on function public.admin_users() from public, anon;
+grant execute on function public.is_admin() to authenticated;
+grant execute on function public.ai_allowed() to authenticated;
+grant execute on function public.log_ai_usage(text, text, int, int, numeric) to authenticated;
+grant execute on function public.admin_users() to authenticated;

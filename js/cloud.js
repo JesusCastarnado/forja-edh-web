@@ -123,6 +123,17 @@ async function syncCollection() {
   }
 }
 
+/* ---------- administración ---------- */
+// Cliente de Supabase con la sesión actual (null si no hay sesión). Las reglas de la base de datos
+// deciden qué puede hacer; la pantalla Admin solo funciona para los administradores.
+export const db = () => (client && user ? client : null);
+let adminP = null, adminFor = "";
+export function isAdmin() {
+  if (!client || !user) return Promise.resolve(false);
+  if (adminFor !== user.id) { adminFor = user.id; adminP = client.rpc("is_admin").then(r => r.data === true, () => false); }
+  return adminP;
+}
+
 /* ---------- compartir y sugerencias ---------- */
 export const shareURL = shareId => `${location.origin}${location.pathname}#compartido/${shareId}`;
 

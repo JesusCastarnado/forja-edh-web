@@ -13,7 +13,8 @@ export function aiStatus() {
 export const getPass = () => { try { return localStorage.getItem("forja-pass") || ""; } catch { return ""; } };
 export const setPass = p => { try { localStorage.setItem("forja-pass", p); } catch {} };
 
-export async function ask(prompt, { onText, signal, effort } = {}) {
+// `action`: qué función de la web la usa (para el panel de consumo): optimizar, encaja, autorrellenar…
+export async function ask(prompt, { onText, signal, effort, action } = {}) {
   let r;
   // En la web publicada, la sesión de «Mis mazos» demuestra al servidor que eres tú.
   const token = await accessToken();
@@ -22,7 +23,7 @@ export async function ask(prompt, { onText, signal, effort } = {}) {
   try {
     r = await fetch(ENDPOINT, {
       method: "POST", signal, headers,
-      body: JSON.stringify({ prompt, effort }),
+      body: JSON.stringify({ prompt, effort, action }),
     });
   } catch (e) {
     if (e && e.name === "AbortError") throw { code: "cancelled" };
