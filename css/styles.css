@@ -575,3 +575,10 @@ nav.tabs a{white-space:nowrap}
   .gbar-act{justify-content:stretch}
   .gbar-act .btn{flex:1 1 auto}
 }
+
+/* ---------- App instalada en iPhone: la página empieza debajo de la barra de la hora ----------
+   Con la app a pantalla completa, iOS dibuja la web por detrás de la barra de estado (hora, batería).
+   La cabecera fija se queda ese hueco (env(safe-area-inset-top)) para no esconderse detrás. */
+header.top{padding-top:max(14px, env(safe-area-inset-top, 0px))}
+@media (max-width:700px){ header.top{padding-top:max(8px, env(safe-area-inset-top, 0px))} }
+.toast{bottom:calc(20px + env(safe-area-inset-bottom, 0px))}
