@@ -146,6 +146,12 @@ Las cartas que tienes físicamente y tu lista de deseos.
 - Descargar la colección en .txt.
 - Se guarda en el navegador y, si entras con tu cuenta, en la nube (necesita la tabla `collections` de `supabase/schema.sql`).
 
+### Novedades
+
+El botón **Novedades** de arriba abre la lista de lo último que se ha añadido a la web, agrupado por fecha y con un enlace para ir a probar cada cosa. El botón muestra cuántas novedades no has visto todavía (se recuerda en tu navegador). Se puede enlazar directamente: https://forja-edh-web.vercel.app/#novedades
+
+Para añadir una novedad, se pone **arriba** en `js/changelog.js` con el siguiente número de `id`, la fecha, un título, un texto corto pensado para quien visita la web y la pestaña donde está (`ir`).
+
 ### Probar mano
 
 - Roba 7 cartas con las imágenes reales y haz mulligan con la regla de Commander (el primero es gratis; luego eliges qué cartas van al fondo).
@@ -303,6 +309,7 @@ js/colview.js         pestaña «Colección» y panel «Tu colección» de Anali
 js/decks.js           «Mis mazos» en el navegador
 js/cloud.js           sincronización de «Mis mazos» y de la colección con Supabase, inicio de sesión, compartir y sugerencias
 js/shared.js          vista del mazo compartido (#compartido/…) para sugerir cambios
+js/changelog.js       lista de «Novedades» (lo último añadido, para quien visita la web)
 js/config.js          URL y clave publicable de Supabase (vacías = sin nube)
 supabase/schema.sql   tablas (mazos, sugerencias y colección), reglas de seguridad y funciones para compartir y para la comunidad
 api/claude.js         función de Vercel que llama a Claude con el SDK oficial

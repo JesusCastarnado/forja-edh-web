@@ -2,6 +2,7 @@ import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
 import { initGuided, showGuided, editInGuided, newDeck } from "./guided.js";
+import { CHANGELOG } from "./changelog.js";
 import * as Decks from "./decks.js";
 import * as Cloud from "./cloud.js";
 import { initShared, showShared } from "./shared.js";
@@ -1169,7 +1170,7 @@ function askName(title, value, label = "Nombre del mazo") {
 /* ---------- navegación ---------- */
 let cmdsLoaded = false;
 function route() {
-  const views = ["analizar", "construir", "guiado", "mazos", "comparar", "coleccion", "mano"];
+  const views = ["analizar", "construir", "guiado", "mazos", "comparar", "coleccion", "mano", "novedades"];
   const h = location.hash.slice(1);
   // Enlace de un mazo compartido: #compartido/<id>
   const shared = /^compartido\/([0-9a-f-]{36})$/i.exec(h);
@@ -1183,6 +1184,8 @@ function route() {
   const v = h === "comunidad" ? "mazos" : views.includes(h) ? h : "analizar";
   views.forEach(x => { $("#view-" + x).hidden = x !== v; });
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
+  $("#btnNews").setAttribute("aria-current", v === "novedades" ? "page" : "false");
+  if (v === "novedades") renderNewsPage();
   if (v === "mano") showGoldfish();
   if (v === "comparar") showCompare();
   if (v === "coleccion") showCollection();
@@ -1191,6 +1194,31 @@ function route() {
   if (v === "mazos") { setMazosTab(h === "comunidad" ? "comm" : "mine"); renderCloud(); }
 }
 window.addEventListener("hashchange", route);
+
+/* ---------- novedades ---------- */
+// El aviso del botón «Novedades» cuenta las que esta persona aún no ha visto (se recuerda en su navegador).
+const NEWS_SEEN = "forja-novedades-visto";
+const newsSeen = () => { try { return +localStorage.getItem(NEWS_SEEN) || 0; } catch { return 0; } };
+const NEWS_TAB = { "#analizar": "Analizar", "#construir": "Construir", "#guiado": "Paso a paso", "#mazos": "Mis mazos", "#comunidad": "Comunidad", "#comparar": "Comparar", "#coleccion": "Colección", "#mano": "Probar mano" };
+function updateNewsBadge() {
+  const n = CHANGELOG.filter(x => x.id > newsSeen()).length, b = $("#newsBadge");
+  b.hidden = !n; b.textContent = n > 9 ? "9+" : String(n);
+  $("#btnNews").setAttribute("aria-label", n ? `Novedades (${n} sin ver)` : "Novedades");
+}
+function renderNewsPage() {
+  const prev = newsSeen(), byDate = new Map();
+  for (const x of CHANGELOG) (byDate.get(x.fecha) || byDate.set(x.fecha, []).get(x.fecha)).push(x);
+  const day = f => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+  $("#newsList").innerHTML = [...byDate].map(([f, xs]) => `<section class="nday"><h3>${day(f)}</h3>${xs.map(x => `
+    <article class="nitem${x.id > prev ? " nuevo" : ""}">
+      <div class="row"><b>${esc(x.titulo)}</b>${x.id > prev ? '<span class="gb new">Nuevo</span>' : ""}${x.ia ? '<span class="gb" title="Usa la IA: en la web publicada solo la puede usar su dueño">Con IA</span>' : ""}</div>
+      <p>${esc(x.texto)}</p>
+      ${x.ir ? `<a href="${esc(x.ir)}">Ir a ${esc(NEWS_TAB[x.ir] || "verlo")} →</a>` : ""}
+    </article>`).join("")}</section>`).join("");
+  try { localStorage.setItem(NEWS_SEEN, String(CHANGELOG[0] ? CHANGELOG[0].id : 0)); } catch {}
+  updateNewsBadge();
+}
+updateNewsBadge();
 
 initShared({ esc, manaHTML, pipsHTML, toast, attachAC, thinking, buildDeck });
 initGoldfish({ esc, toast, getDeck: () => deck });

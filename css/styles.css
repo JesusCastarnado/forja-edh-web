@@ -488,3 +488,15 @@ header.top>.row{min-width:0;max-width:100%}
 .gtnote:empty{display:none}
 .linkbtn{all:unset;cursor:pointer;color:var(--accent);text-decoration:underline}
 .linkbtn:focus-visible{outline:2px solid var(--accent)}
+
+/* ---------- Novedades ---------- */
+.newsbtn{position:relative;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.newsbtn[aria-current="page"]{border-color:var(--accent);color:var(--accent)}
+.nbadge{background:var(--accent);color:var(--accent-ink);border-radius:999px;font-size:11px;font-weight:700;font-family:var(--f-mono);min-width:18px;height:18px;padding:0 5px;display:inline-grid;place-items:center}
+.news{display:grid;gap:22px;max-width:760px}
+.nday h3{font-family:var(--f-display);font-weight:400;font-size:19px;margin:0 0 8px;color:var(--muted)}
+.nday{display:grid;gap:10px}
+.nitem{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:6px}
+.nitem.nuevo{border-color:color-mix(in srgb,var(--accent) 60%,var(--line))}
+.nitem p{margin:0;color:var(--muted)}
+.nitem a{justify-self:start;font-size:14px;color:var(--accent)}
