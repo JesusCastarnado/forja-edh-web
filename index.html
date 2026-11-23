@@ -144,6 +144,9 @@
         <label class="f" for="bBudget" title="Lo que quieres que cueste el mazo entero, comandante incluido">Presupuesto del mazo (total)
           <span class="gprice"><input type="number" id="bBudget" min="0" step="5" inputmode="decimal" placeholder="Sin límite"><span id="bBudgetSym">$</span></span></label>
       </div>
+      <label class="f" for="bOwned" title="Usa las cartas que marcaste en la pestaña Colección">Mi colección
+        <select id="bOwned"><option value="">No tenerla en cuenta</option><option value="prio">Primero las que tengo</option><option value="only">Solo las que tengo</option></select></label>
+      <p class="muted small" id="bOwnedNote" style="margin:-6px 0 0" hidden>Tu colección está vacía: marca tus cartas en la pestaña <a href="#coleccion">Colección</a>.</p>
       <div class="row">
         <button class="btn primary ai" id="btnGenAI">Que la IA lo genere</button>
         <button class="btn" id="btnGenAuto">Generar automático</button>
@@ -202,6 +205,9 @@
             <label class="f" for="gMaxPrice">Precio máximo por carta
               <span class="gprice"><input type="number" id="gMaxPrice" min="0" step="0.5" inputmode="decimal" placeholder="Sin límite"><span id="gMaxSym">$</span><button class="x" id="gMaxClear" type="button" aria-label="Quitar el límite de precio" hidden>×</button></span></label>
             <p class="muted small" id="gMaxNote" style="margin:0"></p>
+            <label class="f" for="gOwned">Mi colección
+              <select id="gOwned"><option value="">No tenerla en cuenta</option><option value="prio">Primero las que tengo</option><option value="only">Solo las que tengo</option></select></label>
+            <p class="muted small" id="gOwnedNote" style="margin:0"></p>
           </div>
         </div>
         <div class="panel gautobox">

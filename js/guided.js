@@ -3,6 +3,7 @@
 import * as SF from "./scryfall.js";
 import * as A from "./analysis.js";
 import * as AI from "./ai.js";
+import * as Owned from "./owned.js";
 import * as Edh from "./edhrec.js";
 import { money, cardMoney, symbol, currencyName } from "./currency.js";
 
@@ -71,6 +72,10 @@ const st = {
 };
 // Filtro de precio: las cartas más caras que el máximo no se sugieren (las que no tienen precio, sí).
 const priceOk = c => !st.maxPrice || c.price <= st.maxPrice;
+// Colección: con «Solo las que tengo» se esconden las demás; con «Primero las que tengo» las tuyas van delante.
+const ownMode = () => (Owned.hasCollection() ? Owned.getMode() : "");
+const ownOk = c => ownMode() !== "only" || Owned.owns(c);
+const ownFirst = list => ownMode() !== "prio" ? list : [...list.filter(Owned.owns), ...list.filter(c => !Owned.owns(c))];
 let booted = false;
 
 const entries = () => [...st.cards.values()];
@@ -146,6 +151,10 @@ async function loadPool() {
       const q = `${SF.ciQuery(ci)} legal:commander game:paper (${st.words.slice(0, 5).map(w => `o:"${w}" or t:"${w}"`).join(" or ")})`;
       base.push(...await SF.search(q, { pages: 2 }).catch(() => []));
     }
+    // Tus cartas también son candidatas, aunque no estén entre las más jugadas (para «La tengo» y el filtro).
+    if (Owned.hasCollection()) {
+      base.push(...await Owned.ownedCards(ci).catch(() => []));
+    }
     if (st.poolKey !== key) return;
     if (st.mode === "guided") renderHead();
     const cmdKeys = new Set(st.cmds.map(A.key)), seen = new Set();
@@ -162,7 +171,15 @@ function stepListAll() {
   const k = STEPS[st.step].k;
   return st.pool.filter(k === "plan" ? (c => nonland(c) && catOf(c) === "plan") : is[k]);
 }
-function stepList() { const all = stepListAll(); return all && all.filter(priceOk); }
+function stepList() { const all = stepListAll(); return all && ownFirst(all.filter(c => priceOk(c) && ownOk(c))); }
+function renderOwnedNote() {
+  const note = $("#gOwnedNote"), sel = $("#gOwned"), has = Owned.hasCollection();
+  sel.disabled = !has; sel.value = ownMode();
+  if (!has) { note.innerHTML = 'Marca tus cartas en la pestaña <a href="#coleccion">Colección</a> para usar este filtro.'; return; }
+  if (!st.cmds.length) { note.textContent = ""; return; }
+  const s = Owned.summary(st.cards), n = s.missing.reduce((a, m) => a + m.q, 0);
+  note.textContent = `En el mazo: ${s.have} tuyas${n ? `, te faltan ${n} (unos ${money(s.price)})` : ""}.`;
+}
 function renderPriceNote() {
   const all = stepListAll(), note = $("#gMaxNote");
   $("#gMaxSym").textContent = symbol();
@@ -179,7 +196,7 @@ function tile(c, attr) {
     <button class="gpickbtn" data-${attr}="${e(c.name)}" ${attr === "pick" ? `aria-pressed="${on}"` : ""} aria-label="${attr === "pick" ? (on ? "Quitar " : "Añadir ") : "Elegir "}${e(c.name)}">
       ${c.img ? `<img src="${e(c.img)}" alt="" loading="lazy">` : `<span class="noimg">${e(c.name)}</span>`}<span class="gcheck" aria-hidden="true">✓</span></button>
     <div class="gmeta"><button class="cn" data-name="${e(c.name)}">${e(c.name)}</button>
-      <div class="gbadges">${attr === "cmd" ? H.pipsHTML(c.ci) : ""}${attr === "pick" && isSyn(c) ? '<span class="gb syn">Sinergia</span>' : ""}${attr === "pick" && st.edh && A.edhOf(st.edh, c) ? `<span class="gb" title="Mazos de este comandante en EDHREC que la juegan">${Math.round(A.edhOf(st.edh, c).inclusion * 100)} % mazos</span>` : `<span class="gb">${c.rank >= 99999 ? "sin ranking" : "#" + c.rank}</span>`}${c.gc ? '<span class="gb gc">GC</span>' : ""}<span class="gb">${cardMoney(c)}</span></div></div></div>`;
+      <div class="gbadges">${attr === "cmd" ? H.pipsHTML(c.ci) : ""}${attr === "pick" && isSyn(c) ? '<span class="gb syn">Sinergia</span>' : ""}${attr === "pick" && st.edh && A.edhOf(st.edh, c) ? `<span class="gb" title="Mazos de este comandante en EDHREC que la juegan">${Math.round(A.edhOf(st.edh, c).inclusion * 100)} % mazos</span>` : `<span class="gb">${c.rank >= 99999 ? "sin ranking" : "#" + c.rank}</span>`}${c.gc ? '<span class="gb gc">GC</span>' : ""}${attr === "pick" && Owned.hasCollection() && Owned.owns(c) ? '<span class="gb ok">La tengo</span>' : ""}<span class="gb">${cardMoney(c)}</span></div></div></div>`;
 }
 
 /* ---------- 1. elegir comandante ---------- */
@@ -282,11 +299,11 @@ function renderHead() {
     <div class="row"><button class="btn" data-gnav="-1" ${st.step === 0 ? "disabled" : ""}>← Atrás</button>${last ? '<button class="btn primary" data-gact="analyze">Analizar mazo</button>' : '<button class="btn primary" data-gnav="1">Siguiente →</button>'}</div></div>`;
 }
 function renderGrid() {
-  renderPriceNote();
+  renderPriceNote(); renderOwnedNote();
   const grid = $("#gGrid"), list = stepList();
   if (!list) { grid.innerHTML = H.thinking("Buscando las cartas más jugadas en tus colores…"); $("#gMore").hidden = true; return; }
   grid.innerHTML = list.slice(0, st.shown).map(c => tile(c, "pick")).join("")
-    || `<p class="muted">${st.maxPrice && stepListAll().length ? `Ninguna carta de este paso cuesta ${money(st.maxPrice, 2)} o menos. Sube el precio máximo en «Filtrar».` : st.mode === "free" ? "Sin resultados." : "No hay sugerencias para este paso en tus colores. Prueba el modo libre."}</p>`;
+    || `<p class="muted">${ownMode() === "only" && stepListAll().length ? "No tienes ninguna carta de este paso en tu colección (en tus colores). Cambia «Mi colección» a «Primero las que tengo» para ver otras." : st.maxPrice && stepListAll().length ? `Ninguna carta de este paso cuesta ${money(st.maxPrice, 2)} o menos. Sube el precio máximo en «Filtrar».` : st.mode === "free" ? "Sin resultados." : "No hay sugerencias para este paso en tus colores. Prueba el modo libre."}</p>`;
   $("#gMore").hidden = list.length <= st.shown;
 }
 function renderDeck() {
@@ -398,8 +415,8 @@ async function poolReady() {
 }
 // Completa sin IA: primero las categorías con hueco, luego el plan; las tierras con no básicas que encajen.
 function quickPick(g, taken) {
-  const pool = st.pool || [], out = [], left = { ...g.def };
-  const ok = c => !taken.has(A.key(c)) && !st.cards.has(A.key(c)) && priceOk(c);
+  const pool = ownFirst(st.pool || []), out = [], left = { ...g.def };
+  const ok = c => !taken.has(A.key(c)) && !st.cards.has(A.key(c)) && priceOk(c) && ownOk(c);
   const take = (c, why) => { taken.add(A.key(c)); out.push({ c, why, ai: false }); };
   let nl = g.nonlandNeed;
   for (const s of STEPS) {
@@ -440,6 +457,7 @@ ${list || "(ninguna todavía)"}
 Huecos por categoría: ${defs || "ninguno: refuerza el plan del comandante"}.
 ${edhHint ? "Cartas con mucha sinergia con este comandante según EDHREC (no están en la lista): " + edhHint + "." : ""}
 ${st.maxPrice ? `Presupuesto: cada carta debe costar como máximo ${st.maxPrice} ${currencyName()}.` : ""}
+${(() => { const m = ownMode(); if (!m || !st.pool) return ""; const mine = st.pool.filter(c => Owned.owns(c) && !st.cards.has(A.key(c))).slice(0, 250).map(c => c.name); if (!mine.length) return ""; return m === "only" ? `COLECCIÓN: elige SOLO entre estas cartas, que son las que tiene el jugador (no hace falta llegar al número pedido si no hay suficientes que encajen): ${mine.join(", ")}.` : `COLECCIÓN: el jugador tiene estas cartas; úsalas siempre que encajen y añade otras solo si aportan claramente más: ${mine.join(", ")}.`; })()}
 Elige exactamente ${g.nonlandNeed} cartas que no sean tierra y ${nonbasic} tierras no básicas. Primero cubre los huecos de cada categoría; el resto, cartas que aprovechen el comandante y las sinergias de las cartas que ya ha puesto (tribus, tipos, mecánicas que se repiten). Sin cartas repetidas ni ya presentes en la lista, todas legales en Commander y dentro de la identidad ${ci || "incolora"}, con su nombre oficial en inglés.
 Responde SOLO con JSON, con esta forma exacta:
 {"resumen":"1-2 frases: qué refuerzan estas cartas","cartas":[{"carta":"Nombre exacto en inglés","motivo":"muy breve: qué aporta o con qué de su lista combina"}]}`;
@@ -451,7 +469,7 @@ Responde SOLO con JSON, con esta forma exacta:
       let nl = g.nonlandNeed, ln = nonbasic, dropped = 0;
       for (const x of raw) {
         const c = SF.cached(x.name), k = c && A.key(c);
-        if (!c || !c.legal || A.isBasic(c) || !A.subsetCI(c.ci, ci) || !priceOk(c) || cmdKeys.has(k) || st.cards.has(k) || taken.has(k)) { dropped++; continue; }
+        if (!c || !c.legal || A.isBasic(c) || !A.subsetCI(c.ci, ci) || !priceOk(c) || !ownOk(c) || cmdKeys.has(k) || st.cards.has(k) || taken.has(k)) { dropped++; continue; }
         if (A.isLand(c) ? ln-- <= 0 : nl-- <= 0) continue;
         taken.add(k); items.push({ c, why: x.why, ai: true });
       }
@@ -474,7 +492,7 @@ function renderAuto(withAI) {
   const sum = auto.items.reduce((a, x) => a + (x.c.price || 0), 0);
   box.innerHTML = `<div class="row between"><h3 style="margin:0">${withAI ? "Propuesta de la IA" : "Propuesta rápida"}: ${auto.items.length} cartas${auto.basics ? ` + ${auto.basics} básicas` : ""}</h3><button class="btn sm" data-auto="close">Cerrar</button></div>
     ${auto.summary ? `<p style="margin:0">${e(auto.summary)}</p>` : ""}
-    <p class="muted small" style="margin:0">Desmarca las que no quieras. Coste aproximado: ${money(sum)}.${auto.dropped ? ` Se descartaron ${auto.dropped} propuestas de la IA (no existían, no eran legales, se salían de tus colores o del precio, o estaban repetidas) y se han cubierto con las que más encajan.` : ""}${auto.basics ? ` Al añadir, los huecos que queden se rellenan con tierras básicas según tus colores.` : ""}</p>
+    <p class="muted small" style="margin:0">Desmarca las que no quieras. Coste aproximado: ${money(sum)}.${Owned.hasCollection() ? (() => { const mine = auto.items.filter(x => Owned.owns(x.c)); const buy = auto.items.length - mine.length; return ` ${mine.length} son de tu colección${buy ? `; habría que conseguir ${buy} (unos ${money(auto.items.filter(x => !Owned.owns(x.c)).reduce((a, x) => a + (x.c.price || 0), 0))})` : ""}.`; })() : ""}${auto.dropped ? ` Se descartaron ${auto.dropped} propuestas de la IA (no existían, no eran legales, se salían de tus colores o del precio, o estaban repetidas) y se han cubierto con las que más encajan.` : ""}${auto.basics ? ` Al añadir, los huecos que queden se rellenan con tierras básicas según tus colores.` : ""}</p>
     ${STEPS.filter(s => groups[s.k]).map(s => `<div class="agroup" style="--c:${s.c}"><div class="eyebrow">${s.label} · ${groups[s.k].length}</div>${groups[s.k].map(([x, i]) => `
       <label class="aitem"><input type="checkbox" checked data-ai="${i}">${x.c.small ? `<img src="${e(x.c.small)}" alt="" loading="lazy">` : "<span></span>"}
         <span style="min-width:0"><button type="button" class="cn" data-name="${e(x.c.name)}">${e(x.c.name)}</button> ${H.manaHTML(x.c.cost)}${isSyn(x.c) ? ' <span class="gb syn">Sinergia</span>' : ""}${x.ai ? "" : ' <span class="gb">auto</span>'}<span class="muted small" style="display:block">${e(x.why || "")}</span></span>
@@ -494,7 +512,7 @@ async function applyAuto() {
 }
 
 /* ---------- acciones ---------- */
-function afterChange() { st.dirty = true; renderAll(); if (st.mode === "guided") renderHead(); save(); }
+function afterChange() { st.dirty = true; renderAll(); renderOwnedNote(); if (st.mode === "guided") renderHead(); save(); }
 function toggle(c) {
   const k = A.key(c);
   if (st.cards.has(k)) st.cards.delete(k); else st.cards.set(k, { c, q: 1 });
@@ -634,6 +652,7 @@ export function initGuided(helpers) {
   };
   let priceTimer = null;
   $("#gMaxPrice").value = st.maxPrice || "";
+  $("#gOwned").addEventListener("change", e => { Owned.setMode(e.target.value); st.shown = 30; renderGrid(); });
   $("#gMaxPrice").addEventListener("input", e => { clearTimeout(priceTimer); priceTimer = setTimeout(() => setMax(e.target.value), 300); });
   $("#gMaxClear").onclick = () => { $("#gMaxPrice").value = ""; setMax(0); };
   renderPriceNote();

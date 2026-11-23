@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 26, fecha: "2026-11-23", titulo: "Construye con tu colección", ir: "#construir",
+    texto: "Si marcas tus cartas en Colección, ahora puedes generar mazos «solo con las que tengo» o «primero las que tengo», en Construir y en Paso a paso (también con Autorrellenar y con IA). Las tuyas salen con la etiqueta «La tengo», y te dice cuántas te faltan y cuánto cuestan." },
   { id: 25, fecha: "2026-11-23", titulo: "Construir con un presupuesto total", ir: "#construir",
     texto: "En Construir ya no pones un precio por carta: escribes lo que quieres que cueste el mazo entero («100 €») y lo genera dentro de ese dinero, con o sin IA. Si se pasa, cambia las cartas caras por otras baratas que hacen lo mismo y te dice cuánto cuesta al final." },
   { id: 24, fecha: "2026-11-23", titulo: "Instálala como app en el móvil", ir: "#analizar",

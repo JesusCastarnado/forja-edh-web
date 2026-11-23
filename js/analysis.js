@@ -148,14 +148,17 @@ export function hasSynergy(c, { edh = null, words = [] } = {}) {
 
 // Completa `cards` (Map clave -> {c,q}) hasta 100 menos los comandantes (99, o 98 con partner/background)
 // con cuotas de ramp/robo/interacción, tierras y básicas.
-export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, theme = "", boosted = new Set(), edh = null } = {}) {
+// Cuánto adelanta a una carta tenerla en la colección (fitScore es logarítmico: 3 ≈ mil veces más jugada; la sinergia fuerte con el comandante aún puede ganar).
+export const OWNED_BONUS = 3;
+// `owns(c)`: si tienes la carta en tu colección; con `ownedOnly` solo se usan las tuyas y, si no, las tuyas van primero.
+export function fillDeck(cmds, cards, pool, basics, { bracket = 3, budget = 0, theme = "", boosted = new Set(), edh = null, owns = null, ownedOnly = false } = {}) {
   const ci = ciUnion(cmds), words = synergyWords(cmds, theme), size = 100 - cmds.length;
   const gcMax = bracket <= 2 ? 0 : bracket === 3 ? 3 : 99;
   let gcCount = [...cards.values()].filter(e => e.c.gc).length;
   const cmdKeys = new Set(cmds.map(key));
   const ok = c => !cmdKeys.has(key(c)) && !cards.has(key(c)) && !isBasic(c) && c.legal && subsetCI(c.ci, ci)
-    && !(budget && c.price > budget) && !(c.gc && gcCount >= gcMax);
-  const memo = new Map(), score = c => { const k = key(c); if (!memo.has(k)) memo.set(k, fitScore(c, { edh, words, boosted })); return memo.get(k); };
+    && !(budget && c.price > budget) && !(c.gc && gcCount >= gcMax) && !(ownedOnly && owns && !owns(c));
+  const memo = new Map(), score = c => { const k = key(c); if (!memo.has(k)) memo.set(k, fitScore(c, { edh, words, boosted }) - (owns && !ownedOnly && owns(c) ? OWNED_BONUS : 0)); return memo.get(k); };
   const seen = new Set();
   const list = pool.filter(c => { const k = key(c); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => score(a) - score(b));
   const take = c => { cards.set(key(c), { c, q: 1 }); if (c.gc) gcCount++; };
