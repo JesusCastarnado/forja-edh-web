@@ -191,12 +191,15 @@ begin
 end $$;
 
 -- Para el panel: cuentas que han entrado en la web (para darles IA con un clic).
+drop function if exists public.admin_users();
 create or replace function public.admin_users()
-returns table (email text, created_at timestamptz, last_sign_in_at timestamptz)
+returns table (email text, created_at timestamptz, last_sign_in_at timestamptz, is_admin boolean)
 language plpgsql stable security definer set search_path = public, auth as $$
 begin
   if not public.is_admin() then raise exception 'Solo para administradores'; end if;
-  return query select lower(u.email)::text, u.created_at, u.last_sign_in_at from auth.users u where u.email is not null order by u.last_sign_in_at desc nulls last;
+  return query select lower(u.email)::text, u.created_at, u.last_sign_in_at,
+    exists (select 1 from public.admins a where a.email = lower(u.email))
+    from auth.users u where u.email is not null order by u.last_sign_in_at desc nulls last;
 end $$;
 
 revoke execute on function public.admin_users() from public, anon;

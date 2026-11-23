@@ -60,7 +60,8 @@ function renderAccess() {
   const e = H.esc, me = (Cloud.state().user.email || "").toLowerCase(), m0 = monthStart();
   const stats = email => { const rows = data.usage.filter(u => u.email === email); return { last: rows[0] && rows[0].at, month: rows.filter(u => u.t >= m0).reduce((a, u) => a + u.cost, 0) }; };
   const has = new Set(data.access.map(a => a.email));
-  const others = data.users.filter(u => u.email !== me && !has.has(u.email));
+  const others = data.users.filter(u => u.email !== me && !u.is_admin && !has.has(u.email));
+  const admins = data.users.filter(u => u.email !== me && u.is_admin);
   $("#admAccess").innerHTML = `
     <div class="row between"><h3 style="margin:0">Acceso a la IA</h3><button class="btn sm" data-adm="reload">Actualizar</button></div>
     <p class="muted small" style="margin:0">Quien esté aquí (y tenga una cuenta en la web con ese email) puede usar la IA en la web publicada, gastando de tu saldo. Tú, como administrador, siempre tienes acceso. Los cambios son al momento.</p>
@@ -71,6 +72,7 @@ function renderAccess() {
     </form>
     <div class="adm-list">
       <div class="adm-row me"><div><b>${e(me)}</b><span class="muted small"> · tú (administrador)</span></div><span class="gb ok">Siempre</span><span class="mono small">${usd(stats(me).month)} este mes</span><span></span></div>
+      ${admins.map(u => `<div class="adm-row me"><div><b>${e(u.email)}</b><span class="muted small"> · administrador</span></div><span class="gb ok">Siempre</span><span class="mono small">${usd(stats(u.email).month)} este mes</span><span></span></div>`).join("")}
       ${data.access.map(a => { const s = stats(a.email); return `
       <div class="adm-row${a.enabled ? "" : " off"}"><div style="min-width:0"><b>${e(a.email)}</b>${a.note ? `<span class="muted small"> · ${e(a.note)}</span>` : ""}<div class="muted small">Desde ${when(a.added_at)} · último uso: ${when(s.last)}</div></div>
         <span class="gb ${a.enabled ? "ok" : ""}">${a.enabled ? "Con IA" : "En pausa"}</span><span class="mono small">${usd(s.month)} este mes</span>

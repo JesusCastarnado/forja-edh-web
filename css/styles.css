@@ -537,3 +537,4 @@ header.top>.row{min-width:0;max-width:100%}
 .adm-table th,.adm-table td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .adm-table th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .adm-table .r{text-align:right}
+.adm-row b{overflow-wrap:anywhere}
