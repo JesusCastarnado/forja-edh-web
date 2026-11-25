@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Jugar · Forja EDH</title>
+<meta name="description" content="Juega partidas de Commander online con tus mazos de Forja EDH.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://api.scryfall.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/play.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1714">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body class="play">
+
+<!-- ===================== VESTÍBULO ===================== -->
+<div id="lobbyView" class="pwrap">
+  <header class="top">
+    <div class="brand"><h1>Forja <span>EDH</span></h1><small>Jugar online</small></div>
+    <div class="row">
+      <label class="pname">Tu nombre <input id="myName" maxlength="24" autocomplete="nickname" placeholder="Cómo te verán"></label>
+      <a class="btn sm" href="index.html#mazos">← Volver a la web</a>
+    </div>
+  </header>
+  <p class="pstatus" id="netStatus" hidden></p>
+
+  <div class="plobby">
+    <section class="panel">
+      <h2 class="ph">1 · Tu mazo</h2>
+      <p class="muted small" id="deckHint">Elige uno de «Mis mazos» o pega una lista.</p>
+      <div id="deckPick" class="pdecks"></div>
+      <details class="ppaste">
+        <summary>Pegar una lista</summary>
+        <label class="f">Lista (con la sección «Commander», o escribe el comandante abajo)
+          <textarea id="pasteText" spellcheck="false" placeholder="Commander&#10;1 Atraxa, Praetors' Voice&#10;&#10;Deck&#10;1 Sol Ring&#10;..."></textarea></label>
+        <label class="f">Comandante (si la lista no lo dice)<input id="pasteCmd" autocomplete="off" placeholder="Nombre en inglés"></label>
+        <button class="btn sm" id="pasteUse">Usar esta lista</button>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2 class="ph">2 · Salas</h2>
+      <div class="pcreate">
+        <input id="roomName" maxlength="40" placeholder="Nombre de la sala (opcional)">
+        <select id="roomMax" aria-label="Jugadores"><option value="2">2 jugadores</option><option value="3">3 jugadores</option><option value="4" selected>4 jugadores</option></select>
+        <label class="small"><input type="checkbox" id="roomPriv"> Privada</label>
+        <button class="btn primary" id="roomCreate">Crear sala</button>
+      </div>
+      <div class="pjoin">
+        <input id="joinCode" maxlength="6" placeholder="Código" autocapitalize="characters" spellcheck="false">
+        <button class="btn" id="joinBtn">Unirme</button>
+      </div>
+      <h3 class="small muted">Salas abiertas</h3>
+      <div id="roomList" class="prooms"><p class="muted small">Conectando…</p></div>
+    </section>
+  </div>
+</div>
+
+<!-- ===================== SALA (antes de empezar) ===================== -->
+<div id="roomView" class="pwrap" hidden>
+  <header class="top">
+    <div class="brand"><h1>Forja <span>EDH</span></h1><small id="roomTitle">Sala</small></div>
+    <div class="row">
+      <span class="pcode">Código <b id="roomCode"></b></span>
+      <button class="btn sm" id="copyLink">Copiar enlace</button>
+      <button class="btn sm" id="leaveRoom">Salir</button>
+    </div>
+  </header>
+  <div class="plobby">
+    <section class="panel">
+      <h2 class="ph">Jugadores</h2>
+      <div id="playerList" class="pplayers"></div>
+      <div class="row" style="margin-top:14px">
+        <label class="small" id="lifeWrap">Vidas <select id="startLife"><option>40</option><option>30</option><option>20</option></select></label>
+        <button class="btn primary" id="startGame">Empezar partida</button>
+      </div>
+      <p class="muted small" id="startHint"></p>
+    </section>
+    <section class="panel">
+      <h2 class="ph">Tu mazo</h2>
+      <div id="deckPick2" class="pdecks"></div>
+    </section>
+  </div>
+</div>
+
+<!-- ===================== MESA ===================== -->
+<div id="tableView" hidden>
+  <div class="tbar">
+    <span class="tbrand">Forja <b>EDH</b></span>
+    <span class="tturn" id="turnInfo"></span>
+    <button class="btn sm primary" id="passTurn">Pasar turno</button>
+    <button class="btn sm" id="untapAll" title="Enderezar todos tus permanentes">Enderezar</button>
+    <button class="btn sm" id="diceBtn">Dados</button>
+    <button class="btn sm" id="tokenBtn">Ficha</button>
+    <span class="grow"></span>
+    <span class="pcode small">Sala <b id="tCode"></b></span>
+    <button class="btn sm" id="logToggle">Registro</button>
+    <button class="btn sm" id="leaveGame">Salir</button>
+  </div>
+  <div class="tgrid" id="tgrid">
+    <div class="opps" id="opps"></div>
+    <div class="mine">
+      <div class="bf" id="bf" data-drop="bf"></div>
+      <aside class="mside">
+        <div class="life" id="lifeBox"></div>
+        <div class="zone cz" id="cmdz" data-drop="cz" data-zone="cz"></div>
+      </aside>
+      <div class="hrow">
+        <div class="zones" id="zones"></div>
+        <div class="phand" id="hand" data-drop="hand"></div>
+      </div>
+    </div>
+    <aside class="tlog" id="tlog">
+      <div class="loglist" id="logList"></div>
+      <form id="chatForm" class="chat"><input id="chatIn" maxlength="200" placeholder="Escribe al resto…" autocomplete="off"><button class="btn sm">Enviar</button></form>
+    </aside>
+  </div>
+  <div class="mull" id="mull" hidden></div>
+</div>
+
+<div class="pzoom" id="pzoom" hidden><img alt=""></div>
+<div class="cmenu" id="cmenu" hidden></div>
+<dialog id="viewer" class="pdlg"><div class="vhead"><h3 id="vTitle"></h3><button class="btn sm" data-close>Cerrar</button></div><p class="muted small" id="vNote"></p><div class="pvgrid" id="vGrid"></div></dialog>
+<dialog id="tokenDlg" class="pdlg"><div class="vhead"><h3>Crear ficha</h3><button class="btn sm" data-close>Cerrar</button></div>
+  <form id="tokenForm" class="row"><input id="tokenQ" placeholder="Treasure, Soldier, Zombie…" autocomplete="off"><button class="btn">Buscar</button></form>
+  <div class="pvgrid" id="tokenGrid"></div></dialog>
+
+<script type="module" src="js/play.js"></script>
+</body>
+</html>

@@ -140,6 +140,8 @@ async function syncCollection() {
 // Cliente de Supabase con la sesión actual (null si no hay sesión). Las reglas de la base de datos
 // deciden qué puede hacer; la pantalla Admin solo funciona para los administradores.
 export const db = () => (client && user ? client : null);
+// El cliente de Supabase tal cual (también sin sesión): lo usa «Jugar» para las salas en tiempo real.
+export const raw = () => client;
 let adminP = null, adminFor = "";
 export function isAdmin() {
   if (!client || !user) return Promise.resolve(false);

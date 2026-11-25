@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 29, fecha: "2026-11-25", titulo: "Jugar online", ir: "jugar.html",
+    texto: "Nuevo botón «Jugar»: crea una sala o únete con un código y jugad partidas de Commander con vuestros mazos, cada uno desde su casa. Es como una mesa de verdad: robas, juegas, giras, mueves cartas al cementerio o al exilio, llevas vidas, veneno y daño de comandante, creas fichas y tiras dados, y los demás lo ven al momento. Tiene mulligan, registro de jugadas y chat." },
   { id: 28, fecha: "2026-11-23", titulo: "Guía del mazo con IA", ir: "#analizar", ia: true,
     texto: "En Analizar, «Guía del mazo» (sustituye a la antigua Radiografía) escribe cómo se juega tu mazo: plan, mulligan, primeros turnos, cartas clave, combos y qué le cuesta. Guárdala con el mazo y la verán también tus amigos en el enlace compartido." },
   { id: 27, fecha: "2026-11-23", titulo: "Importar de Archidekt y exportar para Moxfield", ir: "#analizar",

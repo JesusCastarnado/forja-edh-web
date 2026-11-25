@@ -175,6 +175,26 @@ Para añadir una novedad, se pone **arriba** en `js/changelog.js` con el siguien
 - **Juega los primeros turnos** en solitario: cada turno robas (puedes elegir si se roba en el turno 1, como en multijugador), bajas una tierra y lanzas hechizos si te llega el maná. El maná lo dan las tierras y las piedras o criaturas de maná (las criaturas, a partir del turno siguiente). Los hechizos de ramp que buscan tierras las ponen solas en el campo, y el comandante se lanza desde la zona de mando con su impuesto. Hay un registro de todo lo que pasa.
 - **Simular mil partidas**: juega 1.000 partidas automáticas y te dice el porcentaje de mulligans, de manos atascadas, el turno medio en que sale el comandante y, turno a turno, las tierras y el maná medios y en cuántas partidas llevas una tierra por turno.
 
+### Jugar online
+
+El botón **Jugar** (arriba) abre una página aparte, `jugar.html`, para jugar partidas de Commander con amigos, cada uno desde su casa. Funciona como una mesa de verdad: **no aplica las reglas**, cada uno mueve sus cartas y los demás lo ven al momento.
+
+1. **Elige tu mazo** (de «Mis mazos» o pegando una lista) y escribe tu nombre.
+2. **Crea una sala** (2 a 4 jugadores, pública o privada) o **únete**: a una de la lista de salas abiertas, con su código de 6 letras o con el enlace que te pasen (`jugar.html#sala=CÓDIGO`). Quien llega cuando la partida ya ha empezado, mira.
+3. El anfitrión (quien creó la sala) elige las vidas y pulsa **Empezar**: se sortea el orden y cada uno roba 7 con **mulligan** de Commander (el primero gratis; luego eliges qué cartas van al fondo).
+
+En la mesa:
+- **Arrastra** las cartas entre la mano, el campo, el cementerio, el exilio, la biblioteca y la zona de mando. Doble clic en una carta de la mano (o en tu comandante) la juega.
+- **Clic** en un permanente lo gira o lo endereza. **Clic derecho** (pulsación larga en el móvil): contadores, boca abajo, copiar como ficha, mandar a otra zona…
+- **Biblioteca**: clic para robar; clic derecho para robar varias, barajar, buscar, mirar las X de arriba, moler, revelar o exiliar.
+- **Comandante**: si va al cementerio o al exilio vuelve solo a la zona de mando, y cada vez que lo lanzas desde ahí suma el impuesto (+2).
+- **Vidas, veneno y daño de comandante** de cada rival (suma 21 y se marca en rojo). **Fichas** (busca cualquier ficha de Magic por su nombre en inglés) y **dados** (d6, d20 y moneda).
+- **Pasar turno**: al empezar tu turno se enderezan tus permanentes y robas (en partidas de dos, el primer jugador no roba en su primer turno).
+- A la derecha, el **registro** de todo lo que hace cada uno y el **chat**. Pasa el ratón por una carta para verla en grande.
+- Si recargas o se te cierra la página, vuelve a entrar en la sala (mismo enlace) y recuperas tu mesa.
+
+Cómo funciona por dentro: usa **Supabase Realtime** (el mismo proyecto de Supabase de «Mis mazos»; no hace falta crear tablas ni ejecutar SQL). Cada navegador manda a los demás solo lo público de su mesa; tu mano y tu biblioteca nunca salen de tu navegador (los demás solo ven cuántas cartas tienes). No hace falta cuenta para jugar.
+
 ---
 
 ## Usarla: web publicada o en local
@@ -338,6 +358,10 @@ js/shared.js          vista del mazo compartido (#compartido/…) para sugerir c
 js/exchange.js        importar por enlace (Archidekt) y exportar con el formato de cada web
 js/changelog.js       lista de «Novedades» (lo último añadido, para quien visita la web)
 js/admin.js           pantalla Admin (#admin): acceso a la IA y consumo
+jugar.html            página «Jugar»: salas y mesa de juego online
+css/play.css          estilos de «Jugar»
+js/play.js            «Jugar»: vestíbulo, sala, mesa, mulligan, arrastrar cartas, registro y chat
+js/playnet.js         salas en tiempo real con Supabase Realtime (Presence y Broadcast)
 manifest.json         datos de la app instalable (nombre, colores, iconos)
 sw.js                 service worker: app instalable y sin conexión (red primero)
 icons/                iconos de la app
@@ -360,7 +384,7 @@ package.json          dependencia de la función: @anthropic-ai/sdk
 | [Commander Spellbook](https://commanderspellbook.com) | Combos | Gratis, sin cuenta |
 | [EDHREC](https://edhrec.com) | Qué se juega con cada comandante y su sinergia | Gratis, sin cuenta |
 | [Vercel](https://vercel.com) | Publicar la web (y la función de IA) | Hobby, gratis |
-| [Supabase](https://supabase.com) | Base de datos e inicio de sesión de Mis mazos | Free |
+| [Supabase](https://supabase.com) | Base de datos e inicio de sesión de Mis mazos; salas en tiempo real de «Jugar» | Free (hasta 200 conexiones a la vez) |
 | GitHub | Código e inicio de sesión con GitHub | Gratis |
 | Claude | IA | Tu suscripción (local) o API (opcional) |
 

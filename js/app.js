@@ -1388,7 +1388,7 @@ window.addEventListener("hashchange", route);
 // El aviso del botón «Novedades» cuenta las que esta persona aún no ha visto (se recuerda en su navegador).
 const NEWS_SEEN = "forja-novedades-visto";
 const newsSeen = () => { try { return +localStorage.getItem(NEWS_SEEN) || 0; } catch { return 0; } };
-const NEWS_TAB = { "#analizar": "Analizar", "#construir": "Construir", "#guiado": "Paso a paso", "#mazos": "Mis mazos", "#comunidad": "Comunidad", "#comparar": "Comparar", "#coleccion": "Colección", "#mano": "Probar mano" };
+const NEWS_TAB = { "#analizar": "Analizar", "#construir": "Construir", "#guiado": "Paso a paso", "#mazos": "Mis mazos", "#comunidad": "Comunidad", "#comparar": "Comparar", "#coleccion": "Colección", "#mano": "Probar mano", "jugar.html": "Jugar" };
 function updateNewsBadge() {
   const n = CHANGELOG.filter(x => x.id > newsSeen()).length, b = $("#newsBadge");
   b.hidden = !n; b.textContent = n > 9 ? "9+" : String(n);
