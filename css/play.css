@@ -158,3 +158,19 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
   .opps{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
   .tbrand{display:none}
 }
+
+/* mano del rival (dorsos) y su campo girado, como si estuviera sentado enfrente */
+.ohand{--oh:clamp(26px,5vh,46px);display:flex;justify-content:center;align-items:center;height:var(--oh);padding:3px 8px 0;container-type:inline-size;box-sizing:content-box}
+.ohand .pc{height:var(--oh);width:calc(var(--oh) * .716);flex:none;margin-left:min(2px, (100cqw - 60px - 15 * var(--oh) * .716) / 14);border-width:1px}
+.ohand .pc:first-child{margin-left:0}
+.ohand .pc.back::after{inset:28%;border-width:1px}
+.ohand b{margin-left:8px;font-size:13px;color:var(--muted)}
+.obf{transform:rotate(180deg)}
+.obf .badge{transform:rotate(180deg)}
+/* atajos */
+.cmenu button{display:flex;justify-content:space-between;gap:16px;align-items:center}
+kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--muted);background:var(--surface)}
+.keysdlg{width:min(460px,94vw)}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:8px 0 14px;align-items:center}
+.keys dt{font-family:var(--f-mono);font-size:13px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 8px;text-align:center;background:var(--surface)}
+.keys dd{margin:0;font-size:14px}

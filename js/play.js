@@ -432,6 +432,7 @@ function renderOpps() {
         <button class="linkbtn" data-ozone="gy" data-oid="${esc(id)}">Cementerio ${p.gy.length}</button>
         <button class="linkbtn" data-ozone="ex" data-oid="${esc(id)}">Exilio ${p.ex.length}</button>
       </div>
+      <div class="ohand" title="${p.hand} ${p.hand === 1 ? "carta" : "cartas"} en la mano">${'<div class="pc back"></div>'.repeat(Math.min(p.hand, 15))}<b>${p.hand}</b></div>
       <div class="obody">
         <div class="ocz">${p.cz.map(c => `<div class="pc"${zoomAttr(c.n)}>${cardImg(c.n)}${c.tax ? `<span class="badge">+${c.tax}</span>` : ""}</div>`).join("")}</div>
         <div class="obf">${p.bf.map(b => `<div class="pc${b.t ? " tap" : ""}${b.f ? " down" : ""}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`).join("")}</div>
@@ -544,38 +545,83 @@ function bindTable() {
   });
   document.addEventListener("click", e => { if (!e.target.closest("#cmenu")) hideMenu(); });
   addEventListener("keydown", e => { if (e.key === "Escape") hideMenu(); });
+  addEventListener("keydown", onKey);
+  $("#keysBtn").addEventListener("click", () => $("#keysDlg").showModal());
+  // La carta que tienes debajo del ratón (para los atajos de teclado).
+  document.addEventListener("pointerover", e => { const el = e.target.closest(".pc.own[data-i]"); if (el) hoverI = el.dataset.i; });
+  document.addEventListener("pointerout", e => { const el = e.target.closest(".pc.own[data-i]"); if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hoverI = null; });
 
   bindDrag(); bindZoom();
 }
+/* ===================== atajos de teclado ===================== */
+let hoverI = null;
+const keyName = e => (e.key === "Delete" || e.key === "Backspace" ? "Supr" : e.key === "=" || e.key === "+" ? "+" : e.key === "-" || e.key === "_" ? "-" : e.key.length === 1 ? e.key.toUpperCase() : e.key);
+// Atajos sin carta: con el ratón en cualquier sitio de la mesa.
+const TABLE_KEYS = {
+  R: () => draw(1),
+  B: () => { shuffle(G.lib); addLog("baraja su biblioteca"); changed(); },
+  E: () => $("#untapAll").click(),
+  P: () => { if (activeId() === ME.id) $("#passTurn").click(); },
+  F: () => $("#tokenBtn").click(),
+  D: () => addLog(`tira un d6: ${1 + Math.floor(Math.random() * 6)}`),
+  L: () => $("#logToggle").click(),
+  "?": () => $("#keysDlg").showModal(),
+};
+function onKey(e) {
+  if ($("#tableView").hidden || !G || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
+  if (document.querySelector("dialog[open]") || !$("#mull").hidden) return;
+  const k = keyName(e);
+  if (hoverI && G.cards[hoverI] && where(hoverI)) {
+    const act = cardActs(hoverI).find(a => a && a.key === k);
+    if (act) {
+      e.preventDefault(); hideMenu();
+      const i = hoverI;
+      if (!["G", "+", "-", "V", "C"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
+      act.run(i); return;
+    }
+  }
+  const t = TABLE_KEYS[k];
+  if (t) { e.preventDefault(); hideMenu(); t(); }
+}
 function lifeLog() { clearTimeout(lifeLog.t); lifeLog.t = setTimeout(() => G && addLog(`tiene ${G.life} vidas`), 900); }
 
-function createToken(name, u) {
+function createToken(name, u, copy) {
   const i = "t" + (++G.n); G.cards[i] = { n: name, u, tok: 1 };
   const pos = freeSpot(G.cards[i]); G.bf.push({ i, x: pos.x, y: pos.y, t: false, f: false, c: 0 });
-  addLog(`crea una ficha: ${name}`); changed();
+  addLog(copy ? `crea una copia de ${name}` : `crea una ficha: ${name}`); changed();
 }
 
+// Acciones sobre una carta mía. `key`: su atajo de teclado (con el ratón encima de la carta).
+// `when(z, c, b)`: si se puede en la zona donde está (b = la carta en el campo, si está ahí).
+const bfOf = i => G.bf.find(x => x.i === i);
+const nameOrHidden = (i, b) => (b && b.f ? "una carta boca abajo" : G.cards[i].n);
+const CARD_ACTS = [
+  { key: "J", label: "Al campo", when: z => z !== "bf", run: i => move(i, "bf") },
+  { key: "", label: "Al campo boca abajo", when: z => z === "hand", run: i => move(i, "bf", { faceDown: true }) },
+  { key: "G", label: b => (b.t ? "Enderezar" : "Girar"), when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.t = !b.t; addLog(`${b.t ? "gira" : "endereza"} ${nameOrHidden(i, b)}`); changed(); } },
+  { key: "+", label: "+1 contador", when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.c = (b.c || 0) + 1; addLog(`pone un contador en ${nameOrHidden(i, b)} (${b.c})`); changed(); } },
+  { key: "-", label: "−1 contador", when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.c = (b.c || 0) - 1; addLog(`quita un contador de ${nameOrHidden(i, b)} (${b.c})`); changed(); } },
+  { key: "V", label: b => (b.f ? "Poner boca arriba" : "Poner boca abajo"), when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.f = !b.f; addLog(b.f ? `pone ${G.cards[i].n} boca abajo` : `pone boca arriba ${G.cards[i].n}`); changed(); } },
+  { key: "C", label: "Copiar (crea una ficha igual)", when: (z, c, b) => !(b && b.f), run: i => { const c = G.cards[i]; createToken(c.n, c.u || img(c.n, "img"), true); } },
+  null,
+  { key: "M", label: "A la mano", when: z => z !== "hand", run: i => move(i, "hand") },
+  { key: "Supr", label: "Al cementerio", when: z => z !== "gy", run: i => move(i, "gy", { force: true }) },
+  { key: "X", label: "Al exilio", when: z => z !== "ex", run: i => move(i, "ex", { force: true }) },
+  { key: "A", label: "Encima de la biblioteca", when: () => true, run: i => move(i, "lib") },
+  { key: "Z", label: "Debajo de la biblioteca", when: () => true, run: i => move(i, "lib", { bottom: true }) },
+  { key: "", label: "A la zona de mando", when: (z, c) => c.cmd && z !== "cz", run: i => move(i, "cz") },
+  { key: "", label: "Quitar un impuesto", when: (z, c) => c.cmd && z === "cz" && G.tax[c.i], run: i => { G.tax[i]--; changed(); } },
+  { key: "", label: "Enseñar a los demás", when: z => z === "hand", run: i => addLog(`enseña ${G.cards[i].n} de su mano`) },
+];
+function cardActs(i) {
+  const z = where(i), c = { ...G.cards[i], i }, b = bfOf(i);
+  return CARD_ACTS.filter(a => !a || a.when(z, c, b));
+}
 function cardMenu(e, i) {
-  const z = where(i), c = G.cards[i], b = G.bf.find(x => x.i === i), items = [];
-  if (z !== "bf") items.push(["Al campo", () => move(i, "bf")]);
-  if (z === "hand") items.push(["Al campo boca abajo", () => move(i, "bf", { faceDown: true })]);
-  if (b) {
-    items.push([b.t ? "Enderezar" : "Girar", () => { b.t = !b.t; changed(); }]);
-    items.push(["+1 contador", () => { b.c = (b.c || 0) + 1; addLog(`pone un contador en ${b.f ? "una carta" : c.n} (${b.c})`); changed(); }]);
-    items.push(["−1 contador", () => { b.c = (b.c || 0) - 1; addLog(`quita un contador de ${b.f ? "una carta" : c.n} (${b.c})`); changed(); }]);
-    items.push([b.f ? "Poner boca arriba" : "Poner boca abajo", () => { b.f = !b.f; addLog(b.f ? `pone ${c.n} boca abajo` : `pone boca arriba ${c.n}`); changed(); }]);
-    items.push(["Crear una copia (ficha)", () => createToken(c.n, c.u || img(c.n, "img"))]);
-  }
-  items.push(null);
-  if (z !== "hand") items.push(["A la mano", () => move(i, "hand")]);
-  if (z !== "gy") items.push(["Al cementerio", () => move(i, "gy", { force: true })]);
-  if (z !== "ex") items.push(["Al exilio", () => move(i, "ex", { force: true })]);
-  items.push(["Encima de la biblioteca", () => move(i, "lib")]);
-  items.push(["Debajo de la biblioteca", () => move(i, "lib", { bottom: true })]);
-  if (c.cmd && z !== "cz") items.push(["A la zona de mando", () => move(i, "cz")]);
-  if (c.cmd && z === "cz" && G.tax[i]) items.push(["Quitar un impuesto", () => { G.tax[i]--; changed(); }]);
-  if (z === "hand") items.push(null, ["Enseñar a los demás", () => addLog(`enseña ${c.n} de su mano`)]);
-  menu(e, items);
+  const b = bfOf(i);
+  const items = cardActs(i).map(a => a && [typeof a.label === "function" ? a.label(b) : a.label, () => a.run(i), a.key]);
+  menu(e, items.filter((x, k, arr) => x || (k > 0 && arr[k - 1] && k < arr.length - 1)));
 }
 function libMenu(e) {
   const ask = (q, def) => { const n = parseInt(prompt(q, def), 10); return n > 0 ? Math.min(n, 99) : 0; };
@@ -629,7 +675,7 @@ function menu(e, items, inside) {
   if (inside && m.parentElement !== inside) inside.appendChild(m);
   if (!inside && m.parentElement !== document.body) document.body.appendChild(m);
   menuHost = items;
-  m.innerHTML = items.map((it, k) => it ? `<button data-mk="${k}">${esc(it[0])}</button>` : "<hr>").join("");
+  m.innerHTML = items.map((it, k) => it ? `<button data-mk="${k}"><span>${esc(it[0])}</span>${it[2] ? `<kbd>${esc(it[2])}</kbd>` : ""}</button>` : "<hr>").join("");
   m.hidden = false;
   const r = m.getBoundingClientRect(), x = Math.min(e.clientX, innerWidth - r.width - 8), y = Math.min(e.clientY, innerHeight - r.height - 8);
   m.style.left = Math.max(8, x) + "px"; m.style.top = Math.max(8, y) + "px";

@@ -96,6 +96,7 @@
     <button class="btn sm" id="untapAll" title="Enderezar todos tus permanentes">Enderezar</button>
     <button class="btn sm" id="diceBtn">Dados</button>
     <button class="btn sm" id="tokenBtn">Ficha</button>
+    <button class="btn sm" id="keysBtn" title="Atajos de teclado (?)">Atajos</button>
     <span class="grow"></span>
     <span class="pcode small">Sala <b id="tCode"></b></span>
     <button class="btn sm" id="logToggle">Registro</button>
@@ -128,6 +129,32 @@
 <dialog id="tokenDlg" class="pdlg"><div class="vhead"><h3>Crear ficha</h3><button class="btn sm" data-close>Cerrar</button></div>
   <form id="tokenForm" class="row"><input id="tokenQ" placeholder="Treasure, Soldier, Zombie…" autocomplete="off"><button class="btn">Buscar</button></form>
   <div class="pvgrid" id="tokenGrid"></div></dialog>
+
+<dialog id="keysDlg" class="pdlg keysdlg"><div class="vhead"><h3>Atajos de teclado</h3><button class="btn sm" data-close>Cerrar</button></div>
+  <p class="muted small">Pon el ratón encima de una de tus cartas y pulsa la tecla.</p>
+  <dl class="keys">
+    <dt>G</dt><dd>Girar / enderezar</dd>
+    <dt>C</dt><dd>Copiar la carta (crea una ficha igual)</dd>
+    <dt>J</dt><dd>Jugarla al campo</dd>
+    <dt>M</dt><dd>A la mano</dd>
+    <dt>Supr</dt><dd>Al cementerio</dd>
+    <dt>X</dt><dd>Al exilio</dd>
+    <dt>A / Z</dt><dd>Encima / debajo de la biblioteca</dd>
+    <dt>V</dt><dd>Boca abajo / boca arriba</dd>
+    <dt>+ / −</dt><dd>Poner / quitar un contador</dd>
+  </dl>
+  <p class="muted small">Y en cualquier sitio de la mesa:</p>
+  <dl class="keys">
+    <dt>R</dt><dd>Robar una carta</dd>
+    <dt>B</dt><dd>Barajar la biblioteca</dd>
+    <dt>E</dt><dd>Enderezar todo</dd>
+    <dt>P</dt><dd>Pasar el turno</dd>
+    <dt>F</dt><dd>Crear una ficha</dd>
+    <dt>D</dt><dd>Tirar un dado de 6</dd>
+    <dt>L</dt><dd>Mostrar / ocultar el registro</dd>
+    <dt>?</dt><dd>Ver estos atajos</dd>
+  </dl>
+</dialog>
 
 <script type="module" src="js/play.js"></script>
 </body>

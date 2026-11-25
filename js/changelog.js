@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 30, fecha: "2026-11-25", titulo: "Jugar: atajos de teclado y rivales enfrente", ir: "jugar.html",
+    texto: "En la mesa, los rivales se ven como si estuvieran sentados enfrente (su campo girado) y con su mano en dorsos de carta, para saber de un vistazo cuántas tienen. Y hay atajos de teclado: pon el ratón sobre una carta y pulsa G para girarla, C para copiarla, Supr para mandarla al cementerio… Pulsa «?» para verlos todos." },
   { id: 29, fecha: "2026-11-25", titulo: "Jugar online", ir: "jugar.html",
     texto: "Nuevo botón «Jugar»: crea una sala o únete con un código y jugad partidas de Commander con vuestros mazos, cada uno desde su casa. Es como una mesa de verdad: robas, juegas, giras, mueves cartas al cementerio o al exilio, llevas vidas, veneno y daño de comandante, creas fichas y tiras dados, y los demás lo ven al momento. Tiene mulligan, registro de jugadas y chat." },
   { id: 28, fecha: "2026-11-23", titulo: "Guía del mazo con IA", ir: "#analizar", ia: true,
