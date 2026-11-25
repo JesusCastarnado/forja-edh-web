@@ -35,6 +35,7 @@
     <a class="btn sm primary playbtn" href="jugar.html" title="Partidas online con tus mazos">Jugar</a>
     <button class="btn sm primary" id="btnInstall" hidden title="Instalar Forja EDH como app">Instalar app</button>
     <a class="btn sm newsbtn" href="#admin" id="btnAdmin" hidden title="Solo tú ves esto">Admin</a>
+    <button class="btn sm bizumbtn" id="btnBizum" hidden title="Invítame a un café (Bizum o PayPal)">☕ Apoyar</button>
     <a class="btn sm newsbtn" href="#sugerencias" id="btnFeedback" title="Ideas y fallos: cuéntanos qué mejorar">Sugerencias</a>
     <a class="btn sm newsbtn" href="#novedades" id="btnNews" title="Lo último que se ha añadido">Novedades<span class="nbadge" id="newsBadge" hidden></span></a>
     <select id="currency" class="cursel" aria-label="Moneda de los precios" title="Moneda de los precios"><option value="usd">$ USD</option><option value="eur">€ EUR</option></select>
@@ -472,6 +473,21 @@
 <dialog id="guideDlg" class="sdlg" aria-label="Guía del mazo"><div id="guideBody" class="form"></div></dialog>
 <dialog id="histDlg" class="sdlg" aria-label="Historial de versiones"><div id="histBody" class="form"></div></dialog>
 <dialog id="suggDlg" class="sdlg" aria-label="Sugerencias"><div id="suggBody" class="form"></div></dialog>
+<dialog id="bizumDlg" class="bizumdlg" aria-labelledby="bizumTitle">
+  <div class="bzhead"><span class="bzcup" aria-hidden="true">☕</span><h3 id="bizumTitle">Invítame a un café</h3></div>
+  <p>Forja EDH es gratis y sin anuncios. Si te está siendo útil y quieres ayudar a mantenerla (y a pagar la IA), puedes invitarme a lo que quieras por Bizum o por PayPal. ¡Gracias!</p>
+  <div id="bizumBox">
+    <span class="eyebrow">Bizum</span>
+    <div class="bznum"><span class="mono" id="bizumNum"></span><button class="btn sm primary" id="bizumCopy">Copiar número</button></div>
+    <p class="muted small">En la app de tu banco: Bizum → Enviar dinero → pega el número. En el concepto puedes poner «Forja EDH».</p>
+  </div>
+  <div id="paypalBox">
+    <span class="eyebrow">PayPal</span>
+    <a class="bznum bzpp" id="paypalLink" target="_blank" rel="noopener"><span class="mono" id="paypalName"></span><span class="btn sm primary">Abrir PayPal ↗</span></a>
+    <p class="muted small">Se abre PayPal en otra pestaña: eliges la cantidad y listo. Puedes pagar con tu cuenta o con tarjeta.</p>
+  </div>
+  <div class="row" style="justify-content:flex-end"><button class="btn sm" id="bizumClose">Cerrar</button></div>
+</dialog>
 <dialog id="nameDlg">
   <form method="dialog" class="form">
     <h3 style="margin:0" id="nameTitle">Guardar mazo</h3>

@@ -618,3 +618,17 @@ dialog .md.guide{max-height:60vh;overflow:auto;padding-right:6px}
 .adm-fb{display:grid;gap:12px;margin-bottom:16px}
 .adm-fb .seg .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .fbname input{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--fg)}
+
+/* Bizum («Apoyar») */
+.bizumbtn{border-color:var(--accent);color:var(--accent)}
+.bizumdlg{width:min(420px,92vw)}
+.bzhead{display:flex;align-items:center;gap:10px}
+.bzhead h3{margin:0;font-family:var(--f-display);font-weight:400;font-size:24px}
+.bzcup{font-size:28px;line-height:1}
+.bznum{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:4px 0 10px}
+.bznum .mono{font-size:22px;letter-spacing:.06em;color:var(--accent)}
+.bzpp{text-decoration:none;color:inherit}
+.bzpp:hover{border-color:var(--accent)}
+.bzpp .mono{font-size:16px;letter-spacing:.02em}
+#bizumBox,#paypalBox{display:grid;gap:2px;margin-top:8px}
+#bizumBox[hidden],#paypalBox[hidden]{display:none}

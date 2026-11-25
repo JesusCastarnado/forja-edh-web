@@ -163,6 +163,10 @@ Al mantener pulsado el icono hay accesos directos a Paso a paso, Mis mazos y Pro
 
 Por dentro: `manifest.json` (nombre, colores, iconos de `icons/`) y `sw.js` (service worker con estrategia «red primero»).
 
+### Apoyar la web (Bizum y PayPal)
+
+El botón **☕ Apoyar** de la cabecera abre una ventana con dos formas de ayudar: el número de **Bizum** con un botón para copiarlo (se envía desde la app del banco) y un enlace a **PayPal.me**, donde quien quiera elige la cantidad y paga con su cuenta o con tarjeta. Los dos datos están en `js/config.js` (`BIZUM` y `PAYPAL`): si dejas uno vacío, desaparece esa opción, y si dejas los dos, desaparece el botón. Ojo: son públicos, los ve cualquiera que abra la web.
+
 ### Sugerencias
 
 El botón **Sugerencias** (arriba) abre un formulario para mandar ideas o avisar de fallos: eliges si es una idea, algo que no funciona u otra cosa, lo escribes y, si quieres, pones tu nombre. No hace falta cuenta. Si has entrado con tu cuenta en «Mis mazos», debajo ves las que has enviado, si ya se han leído y la respuesta.

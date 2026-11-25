@@ -5,6 +5,7 @@ import { initGuided, showGuided, editInGuided, newDeck } from "./guided.js";
 import { CHANGELOG } from "./changelog.js";
 import { initAdmin, showAdmin } from "./admin.js";
 import { initFeedback, showFeedback } from "./feedback.js";
+import { BIZUM, PAYPAL } from "./config.js";
 import * as Owned from "./owned.js";
 import * as Ex from "./exchange.js";
 import * as Decks from "./decks.js";
@@ -1413,6 +1414,28 @@ function renderNewsPage() {
 updateNewsBadge();
 initAdmin({ esc, toast, thinking });
 initFeedback({ esc, toast, thinking });
+initBizum();
+
+/* ---------- Bizum (botón «Apoyar») ---------- */
+function initBizum() {
+  if (!BIZUM && !PAYPAL) return;
+  const num = String(BIZUM || "").replace(/\D/g, ""), pretty = num.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
+  const pp = String(PAYPAL || "").replace(/[^A-Za-z0-9_.-]/g, "");
+  const dlg = $("#bizumDlg");
+  $("#btnBizum").hidden = false;
+  $("#bizumBox").hidden = !num; $("#paypalBox").hidden = !pp;
+  $("#bizumNum").textContent = pretty;
+  $("#paypalLink").href = "https://paypal.me/" + encodeURIComponent(pp);
+  $("#paypalName").textContent = "paypal.me/" + pp;
+  $("#btnBizum").addEventListener("click", () => dlg.showModal());
+  $("#bizumClose").addEventListener("click", () => dlg.close());
+  dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); }); // clic fuera
+  $("#bizumCopy").addEventListener("click", () => {
+    const ok = () => { $("#bizumCopy").textContent = "¡Copiado!"; setTimeout(() => { $("#bizumCopy").textContent = "Copiar número"; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(num).then(ok, () => prompt("Copia el número:", num));
+    else prompt("Copia el número:", num);
+  });
+}
 
 /* ---------- instalar como app ---------- */
 // Android y ordenadores con Chrome/Edge avisan de que se puede instalar; en iPhone/iPad hay que
