@@ -2,6 +2,7 @@
 // se gasta. Los datos están en Supabase (tablas ai_access y ai_usage) y las reglas de la base de datos
 // impiden que nadie más los vea, aunque abra esta pantalla a mano.
 import * as Cloud from "./cloud.js";
+import { KINDS, STATUS, fbHint } from "./feedback.js";
 
 const $ = s => document.querySelector(s);
 let H = null; // utilidades de app.js: esc, toast, thinking
@@ -28,8 +29,12 @@ export function initAdmin(helpers) {
     else if (a === "toggle") setEnabled(email, b.dataset.on !== "1");
     else if (a === "remove" && confirm(`¿Quitar el acceso a la IA a ${email}?`)) removeAccess(email);
     else if (a === "reload") showAdmin();
+    else if (a === "fbdel" && confirm("¿Borrar esta sugerencia? No se puede deshacer.")) fbUpdate(b.dataset.id, null);
+    else if (a === "fbreply") fbUpdate(b.dataset.id, { reply: (root.querySelector(`[data-fbreply="${b.dataset.id}"]`) || {}).value || "", status: "vista" });
+    else if (a === "fbfilter") { fbFilter = b.dataset.f; renderFeedback(); }
   });
   root.addEventListener("change", e => {
+    if (e.target.dataset.fbstatus) { fbUpdate(e.target.dataset.fbstatus, { status: e.target.value }); return; }
     if (e.target.id === "admLimit") { try { localStorage.setItem(LIMIT, String(Math.max(0, parseFloat(String(e.target.value).replace(",", ".")) || 0))); } catch {} renderUsage(); }
   });
 }
@@ -51,8 +56,42 @@ export async function showAdmin() {
   const err = acc.error || users.error || usage.error;
   if (err) { root.innerHTML = `<p class="no">No se pudieron leer los datos: ${H.esc(err.message)}. ¿Están creadas las tablas del panel en Supabase (supabase/schema.sql)?</p>`; return; }
   data = { access: acc.data || [], users: users.data || [], usage: (usage.data || []).map(u => ({ ...u, cost: +u.cost_usd || 0, t: new Date(u.at) })) };
-  root.innerHTML = `<div class="adm-grid"><section class="panel" id="admAccess"></section><section class="panel" id="admUsage"></section></div>`;
-  renderAccess(); renderUsage();
+  root.innerHTML = `<section class="panel adm-fb" id="admFeedback"></section><div class="adm-grid"><section class="panel" id="admAccess"></section><section class="panel" id="admUsage"></section></div>`;
+  renderAccess(); renderUsage(); loadFeedback();
+}
+
+/* ---------- sugerencias ---------- */
+let fb = [], fbFilter = "abiertas", fbErr = "";
+async function loadFeedback() {
+  const { data: rows, error } = await Cloud.db().from("feedback").select("id,at,email,author,kind,text,page,status,reply").order("at", { ascending: false }).limit(300);
+  fb = rows || []; fbErr = error ? fbHint(error) : "";
+  renderFeedback();
+}
+function renderFeedback() {
+  const box = $("#admFeedback"); if (!box) return;
+  const e = H.esc;
+  if (fbErr) { box.innerHTML = `<h3 style="margin:0">Sugerencias</h3><p class="muted small">${e(fbErr)}</p>`; return; }
+  const open = fb.filter(f => f.status === "nueva" || f.status === "vista"), nuevas = fb.filter(f => f.status === "nueva").length;
+  const list = fbFilter === "abiertas" ? open : fbFilter === "nuevas" ? fb.filter(f => f.status === "nueva") : fb;
+  const tab = (f, label) => `<button class="btn sm" data-adm="fbfilter" data-f="${f}" aria-pressed="${fbFilter === f}">${label}</button>`;
+  box.innerHTML = `
+    <div class="row between"><h3 style="margin:0">Sugerencias${nuevas ? ` <span class="fbst nueva">${nuevas} nueva${nuevas === 1 ? "" : "s"}</span>` : ""}</h3>
+      <span class="seg">${tab("nuevas", "Nuevas")}${tab("abiertas", "Pendientes")}${tab("todas", `Todas (${fb.length})`)}</span></div>
+    <p class="muted small" style="margin:0">Lo que manda la gente desde la pestaña Sugerencias. Quien tiene cuenta ve el estado y tu respuesta.</p>
+    <div class="fblist">${list.map(f => `<article class="fbitem adm">
+      <div class="row between"><span class="small"><b>${e(f.author || f.email || "Anónimo")}</b>${f.author && f.email ? ` <span class="muted">· ${e(f.email)}</span>` : ""} <span class="muted">· ${e(KINDS[f.kind] || f.kind)} · ${new Date(f.at).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" })}</span></span>
+        <span class="row"><select data-fbstatus="${f.id}" aria-label="Estado">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}"${k === f.status ? " selected" : ""}>${v}</option>`).join("")}</select>
+        <button class="btn sm danger" data-adm="fbdel" data-id="${f.id}">Borrar</button></span></div>
+      <p class="fbtext">${e(f.text)}</p>
+      <div class="row fbans"><input data-fbreply="${f.id}" maxlength="1000" value="${e(f.reply)}" placeholder="${f.email ? "Respuesta (la verá en su pestaña Sugerencias)" : "Respuesta (la envió sin cuenta: no podrá verla)"}"><button class="btn sm" data-adm="fbreply" data-id="${f.id}">Responder</button></div>
+    </article>`).join("") || '<p class="muted small">No hay sugerencias aquí.</p>'}</div>`;
+}
+async function fbUpdate(id, patch) {
+  const q = Cloud.db().from("feedback");
+  const { error } = patch ? await q.update(patch).eq("id", id) : await q.delete().eq("id", id);
+  if (error) { H.toast("No se pudo: " + error.message); return; }
+  H.toast(patch ? (patch.reply !== undefined ? "Respuesta guardada" : "Estado cambiado") : "Sugerencia borrada");
+  loadFeedback();
 }
 
 /* ---------- acceso a la IA ---------- */

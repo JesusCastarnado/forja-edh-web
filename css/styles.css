@@ -595,3 +595,26 @@ dialog .md.guide{max-height:60vh;overflow:auto;padding-right:6px}
 .sguide{margin-bottom:16px}
 .sguide summary{cursor:pointer}
 .sguide[open] summary{margin-bottom:6px}
+
+/* Sugerencias */
+.fbgrid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:820px){.fbgrid{grid-template-columns:1fr}}
+.fbform{display:grid;gap:12px}
+.fbform textarea{min-height:160px}
+.fbname{flex:1;max-width:320px}
+.fbdone{margin:0;padding:10px 12px;border-radius:8px;border:1px solid var(--good);color:var(--good);background:color-mix(in srgb,var(--good) 10%,transparent)}
+.fblist{display:grid;gap:10px}
+.fbitem{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--raise);display:grid;gap:6px}
+.fbtext{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.fbreply{border-left:3px solid var(--accent);padding:4px 10px;background:var(--surface);border-radius:0 6px 6px 0}
+.fbreply p{margin:2px 0 0;white-space:pre-wrap}
+.fbst{font-size:11px;font-family:var(--f-mono);border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted);white-space:nowrap}
+.fbst.nueva{border-color:var(--accent);color:var(--accent)}
+.fbst.vista{border-color:var(--warn);color:var(--warn)}
+.fbst.hecha{border-color:var(--good);color:var(--good)}
+.fbans{flex-wrap:nowrap}
+.fbans input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.fbitem.adm select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:13px}
+.adm-fb{display:grid;gap:12px;margin-bottom:16px}
+.adm-fb .seg .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.fbname input{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--fg)}

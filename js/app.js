@@ -4,6 +4,7 @@ import * as AI from "./ai.js";
 import { initGuided, showGuided, editInGuided, newDeck } from "./guided.js";
 import { CHANGELOG } from "./changelog.js";
 import { initAdmin, showAdmin } from "./admin.js";
+import { initFeedback, showFeedback } from "./feedback.js";
 import * as Owned from "./owned.js";
 import * as Ex from "./exchange.js";
 import * as Decks from "./decks.js";
@@ -1354,7 +1355,7 @@ function askName(title, value, label = "Nombre del mazo") {
 /* ---------- navegación ---------- */
 let cmdsLoaded = false;
 function route() {
-  const views = ["analizar", "construir", "guiado", "mazos", "comparar", "coleccion", "mano", "novedades", "admin"];
+  const views = ["analizar", "construir", "guiado", "mazos", "comparar", "coleccion", "mano", "novedades", "admin", "sugerencias"];
   const h = location.hash.slice(1);
   // Enlace de un mazo compartido: #compartido/<id>
   const shared = /^compartido\/([0-9a-f-]{36})$/i.exec(h);
@@ -1374,6 +1375,8 @@ function route() {
   if (v === "novedades") renderNewsPage();
   $("#btnAdmin").setAttribute("aria-current", v === "admin" ? "page" : "false");
   if (v === "admin") showAdmin();
+  $("#btnFeedback").setAttribute("aria-current", v === "sugerencias" ? "page" : "false");
+  if (v === "sugerencias") showFeedback();
   if (v === "mano") showGoldfish();
   if (v === "comparar") showCompare();
   if (v === "coleccion") showCollection();
@@ -1388,7 +1391,7 @@ window.addEventListener("hashchange", route);
 // El aviso del botón «Novedades» cuenta las que esta persona aún no ha visto (se recuerda en su navegador).
 const NEWS_SEEN = "forja-novedades-visto";
 const newsSeen = () => { try { return +localStorage.getItem(NEWS_SEEN) || 0; } catch { return 0; } };
-const NEWS_TAB = { "#analizar": "Analizar", "#construir": "Construir", "#guiado": "Paso a paso", "#mazos": "Mis mazos", "#comunidad": "Comunidad", "#comparar": "Comparar", "#coleccion": "Colección", "#mano": "Probar mano", "jugar.html": "Jugar" };
+const NEWS_TAB = { "#analizar": "Analizar", "#construir": "Construir", "#guiado": "Paso a paso", "#mazos": "Mis mazos", "#comunidad": "Comunidad", "#comparar": "Comparar", "#coleccion": "Colección", "#mano": "Probar mano", "jugar.html": "Jugar", "#sugerencias": "Sugerencias" };
 function updateNewsBadge() {
   const n = CHANGELOG.filter(x => x.id > newsSeen()).length, b = $("#newsBadge");
   b.hidden = !n; b.textContent = n > 9 ? "9+" : String(n);
@@ -1409,6 +1412,7 @@ function renderNewsPage() {
 }
 updateNewsBadge();
 initAdmin({ esc, toast, thinking });
+initFeedback({ esc, toast, thinking });
 
 /* ---------- instalar como app ---------- */
 // Android y ordenadores con Chrome/Edge avisan de que se puede instalar; en iPhone/iPad hay que

@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 32, fecha: "2026-11-26", titulo: "Mándanos sugerencias", ir: "#sugerencias",
+    texto: "Nuevo botón «Sugerencias» arriba: cuéntanos qué te gustaría que hiciera Forja EDH o qué no funciona. No hace falta cuenta; si entras con la tuya, verás cuándo la leemos y la respuesta." },
   { id: 31, fecha: "2026-11-25", titulo: "Jugar: se puede perder (y ganar)", ir: "jugar.html",
     texto: "En la mesa, si llegas a 0 vidas, a 10 de veneno o a 21 de daño de un mismo comandante, pierdes: los demás te ven eliminado y se salta tu turno. Cuando queda uno solo, sale quién ha ganado. Si te equivocaste al contar, puedes volver a la partida." },
   { id: 30, fecha: "2026-11-25", titulo: "Jugar: atajos de teclado y rivales enfrente", ir: "jugar.html",

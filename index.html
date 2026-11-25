@@ -35,6 +35,7 @@
     <a class="btn sm primary playbtn" href="jugar.html" title="Partidas online con tus mazos">Jugar</a>
     <button class="btn sm primary" id="btnInstall" hidden title="Instalar Forja EDH como app">Instalar app</button>
     <a class="btn sm newsbtn" href="#admin" id="btnAdmin" hidden title="Solo tú ves esto">Admin</a>
+    <a class="btn sm newsbtn" href="#sugerencias" id="btnFeedback" title="Ideas y fallos: cuéntanos qué mejorar">Sugerencias</a>
     <a class="btn sm newsbtn" href="#novedades" id="btnNews" title="Lo último que se ha añadido">Novedades<span class="nbadge" id="newsBadge" hidden></span></a>
     <select id="currency" class="cursel" aria-label="Moneda de los precios" title="Moneda de los precios"><option value="usd">$ USD</option><option value="eur">€ EUR</option></select>
     <button class="btn sm" id="btnPass" hidden>Clave IA</button>
@@ -380,6 +381,32 @@
     <p>Solo tú ves esta pantalla: quién puede usar la IA en la web publicada y cuánto se gasta.</p>
   </div>
   <div id="admBody"></div>
+</section>
+
+<!-- ===================== SUGERENCIAS ===================== -->
+<section id="view-sugerencias" hidden>
+  <div class="hero">
+    <h2>Sugerencias.</h2>
+    <p>¿Qué le falta a Forja EDH? ¿Algo no funciona como esperabas? Cuéntanoslo: lo leemos todo.</p>
+  </div>
+  <div class="fbgrid">
+    <form class="panel fbform" id="fbForm">
+      <div class="seg" role="group" aria-label="Tipo de sugerencia">
+        <button type="button" class="btn sm" data-fbkind="idea" aria-pressed="true">Idea</button>
+        <button type="button" class="btn sm" data-fbkind="fallo" aria-pressed="false">Algo no funciona</button>
+        <button type="button" class="btn sm" data-fbkind="otro" aria-pressed="false">Otra cosa</button>
+      </div>
+      <label class="f" for="fbText">Tu sugerencia
+        <textarea id="fbText" maxlength="2000" required></textarea></label>
+      <div class="row between"><label class="f fbname" for="fbName">Tu nombre (opcional)<input id="fbName" maxlength="40" autocomplete="nickname"></label><span class="muted small mono" id="fbCount">0/2000</span></div>
+      <div class="row"><button class="btn primary" id="fbSend">Enviar sugerencia</button></div>
+      <p class="fbdone" id="fbDone" hidden></p>
+    </form>
+    <section class="panel">
+      <h3 style="margin-top:0">Tus sugerencias</h3>
+      <div id="fbMine" class="fblist"></div>
+    </section>
+  </div>
 </section>
 
 <!-- ===================== NOVEDADES ===================== -->

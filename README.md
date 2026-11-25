@@ -163,6 +163,14 @@ Al mantener pulsado el icono hay accesos directos a Paso a paso, Mis mazos y Pro
 
 Por dentro: `manifest.json` (nombre, colores, iconos de `icons/`) y `sw.js` (service worker con estrategia «red primero»).
 
+### Sugerencias
+
+El botón **Sugerencias** (arriba) abre un formulario para mandar ideas o avisar de fallos: eliges si es una idea, algo que no funciona u otra cosa, lo escribes y, si quieres, pones tu nombre. No hace falta cuenta. Si has entrado con tu cuenta en «Mis mazos», debajo ves las que has enviado, si ya se han leído y la respuesta.
+
+Los administradores las ven en la pantalla **Admin**, arriba del todo: nuevas, pendientes o todas; les cambian el estado (Enviada, Leída, ¡Hecha!, Descartada), las responden o las borran. Se guardan en la tabla `feedback` de Supabase: quien envía no puede leer las de los demás.
+
+Para activarlo hay que ejecutar en Supabase la parte de `supabase/schema.sql` que empieza por «Sugerencias para la web» (o el archivo entero, que se puede ejecutar varias veces).
+
 ### Novedades
 
 El botón **Novedades** de arriba abre la lista de lo último que se ha añadido a la web, agrupado por fecha y con un enlace para ir a probar cada cosa. El botón muestra cuántas novedades no has visto todavía (se recuerda en tu navegador). Se puede enlazar directamente: https://forja-edh-web.vercel.app/#novedades
@@ -360,7 +368,8 @@ js/cloud.js           sincronización de «Mis mazos» y de la colección con Su
 js/shared.js          vista del mazo compartido (#compartido/…) para sugerir cambios
 js/exchange.js        importar por enlace (Archidekt) y exportar con el formato de cada web
 js/changelog.js       lista de «Novedades» (lo último añadido, para quien visita la web)
-js/admin.js           pantalla Admin (#admin): acceso a la IA y consumo
+js/admin.js           pantalla Admin (#admin): sugerencias, acceso a la IA y consumo
+js/feedback.js        pestaña «Sugerencias» (#sugerencias): enviar ideas o fallos y ver las respuestas
 jugar.html            página «Jugar»: salas y mesa de juego online
 css/play.css          estilos de «Jugar»
 js/play.js            «Jugar»: vestíbulo, sala, mesa, mulligan, arrastrar cartas, registro y chat
