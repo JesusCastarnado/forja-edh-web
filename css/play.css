@@ -174,3 +174,13 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
 .keys{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:8px 0 14px;align-items:center}
 .keys dt{font-family:var(--f-mono);font-size:13px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 8px;text-align:center;background:var(--surface)}
 .keys dd{margin:0;font-size:14px}
+
+/* derrota y victoria */
+.opp.dead{opacity:.45;filter:grayscale(.8)}
+.opp.dead .obf{pointer-events:none}
+.ldead{background:var(--bad);color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;text-align:center}
+.ebox{display:grid;gap:10px;justify-items:center;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:28px 32px;max-width:460px}
+.ebox.win{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 20px 60px rgba(0,0,0,.6)}
+.ebox h2{font-family:var(--f-display);font-weight:400;font-size:32px;margin:0}
+.ebox p{margin:0}
+.etrophy{font-size:48px;line-height:1}

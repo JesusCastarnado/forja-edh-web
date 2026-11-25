@@ -16,7 +16,8 @@ const store = {
 };
 const rid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
 // Un id por pestaña (sessionStorage): sobrevive a recargar, y dos pestañas son dos jugadores distintos.
-const tabId = () => { try { let i = sessionStorage.getItem("forja-play-id"); if (!i) { i = rid(); sessionStorage.setItem("forja-play-id", i); } return i; } catch { return rid(); } };
+let freshTab = false;
+const tabId = () => { try { let i = sessionStorage.getItem("forja-play-id"); if (!i) { freshTab = true; i = rid(); sessionStorage.setItem("forja-play-id", i); } return i; } catch { return rid(); } };
 const ME = { id: tabId(), name: store.get("forja-autor") || "" };
 const ZN = { lib: "la biblioteca", hand: "la mano", bf: "el campo", gy: "el cementerio", ex: "el exilio", cz: "la zona de mando" };
 const PUBLIC = new Set(["bf", "gy", "ex", "cz"]);
@@ -133,6 +134,10 @@ function joinRoom(code, opts = {}) {
   room = { code, name: opts.name || "Sala", max: opts.max || 4, priv: !!opts.priv };
   joinedAt = opts.host ? Date.now() - 1 : Date.now();
   pubs.clear(); people = [];
+  // Pestaña nueva (cerraste la anterior): recupera quién eras en esta sala para volver a tu mesa.
+  const prev = store.get("forja-play-me-" + code);
+  if (freshTab && prev && prev !== ME.id && store.get(saveKey(code, prev))) { ME.id = prev; try { sessionStorage.setItem("forja-play-id", prev); } catch {} }
+  freshTab = false; store.set("forja-play-me-" + code, ME.id);
   const saved = loadSaved(code);
   R = (saved && saved.R) || { v: 0, started: false };
   G = saved && saved.G; logs = (saved && saved.logs) || [];
@@ -235,7 +240,8 @@ function renderLog() {
 }
 
 /* ===================== mi partida ===================== */
-const saveKey = code => "forja-play-g-" + code;
+// Cada jugador guarda su mesa aparte (dos pestañas del mismo navegador son dos jugadores).
+const saveKey = (code, id = ME.id) => "forja-play-g-" + code + ":" + id;
 function loadSaved(code) { try { const s = JSON.parse(store.get(saveKey(code)) || "null"); return s && s.R ? s : null; } catch { return null; } }
 function save() { if (room && R.started) store.set(saveKey(room.code), JSON.stringify({ R, G, logs: logs.slice(-80) })); }
 
@@ -271,7 +277,7 @@ function myPub() {
   const C = i => G.cards[i] || { n: "?" };
   return {
     id: ME.id, name: ME.name, deck: G.deck, life: G.life, poison: G.poison, cmdDmg: G.cmdDmg,
-    lib: G.lib.length, hand: G.hand.length, ready: G.mull.phase === "done",
+    lib: G.lib.length, hand: G.hand.length, ready: G.mull.phase === "done", dead: G.dead || null,
     bf: G.bf.map(b => ({ i: b.i, n: b.f ? null : C(b.i).n, u: b.f ? null : C(b.i).u || null, x: +b.x.toFixed(3), y: +b.y.toFixed(3), t: b.t ? 1 : 0, f: b.f ? 1 : 0, c: b.c || 0 })),
     gy: G.gy.map(i => C(i).n), ex: G.ex.map(i => C(i).n),
     cz: G.cz.map(i => ({ n: C(i).n, tax: (G.tax[i] || 0) * 2 })),
@@ -402,7 +408,8 @@ function showView(v) {
   document.body.classList.toggle("intable", v === "table");
   if (v === "lobby") { renderDeckPick(); renderRooms(); }
 }
-function scheduleRender() { if (dragging) { pendingRender = true; return; } requestAnimationFrame(render); }
+let renderTimer = null;
+function scheduleRender() { if (dragging) { pendingRender = true; return; } clearTimeout(renderTimer); renderTimer = setTimeout(render, 30); }
 function render() {
   if (dragging) { pendingRender = true; return; }
   if (!R.started || $("#tableView").hidden) return;
@@ -411,7 +418,7 @@ function render() {
   $("#turnInfo").innerHTML = `Turno ${R.turnNo} · <b>${esc(act === ME.id ? "Tu turno" : nameOf(act))}</b>`;
   $("#passTurn").hidden = act !== ME.id || !G;
   ["#untapAll", "#diceBtn", "#tokenBtn"].forEach(s => $(s).hidden = !G);
-  renderOpps(); renderMine(); renderMull(); renderLog();
+  renderOpps(); renderMine(); renderMull(); renderLog(); renderEnd();
   if (zoomEl && !zoomEl.isConnected) hideZoom();
 }
 function renderOpps() {
@@ -422,9 +429,9 @@ function renderOpps() {
     const p = pubs.get(id), on = people.some(x => x.id === id);
     if (!p) return `<div class="opp"><div class="ohead"><b>${esc(nameOf(id))}</b><span class="muted small">${on ? "preparando su mesa…" : "desconectado"}</span></div><div class="obf"></div></div>`;
     const myDmg = (p.cmdDmg || {})[ME.id] || 0;
-    return `<div class="opp${activeId() === id ? " active" : ""}${on ? "" : " off"}">
+    return `<div class="opp${activeId() === id ? " active" : ""}${on ? "" : " off"}${p.dead ? " dead" : ""}">
       <div class="ohead">
-        <b>${esc(p.name)}</b>${p.ready ? "" : ' <span class="tag">Mulligan…</span>'}${on ? "" : ' <span class="tag bad">Desconectado</span>'}
+        <b>${esc(p.name)}</b>${p.dead ? ` <span class="tag bad">Eliminado: ${esc(p.dead)}</span>` : p.ready ? "" : ' <span class="tag">Mulligan…</span>'}${on ? "" : ' <span class="tag bad">Desconectado</span>'}
         <span class="olife" title="Vidas">${p.life}</span>${p.poison ? `<span class="tag" title="Veneno">☠ ${p.poison}</span>` : ""}
         ${myDmg ? `<span class="tag" title="Daño de tu comandante">⚔ ${myDmg}</span>` : ""}
         <span class="grow"></span>
@@ -459,6 +466,7 @@ function renderMine() {
   $("#cmdz").innerHTML = `<div class="czc">${G.cz.map(i => `<div class="pc own" data-i="${i}" data-z="cz"${zoomAttr(G.cards[i].n)} title="Doble clic para lanzarlo">${cardImg(G.cards[i].n)}${G.tax[i] ? `<span class="badge">+${G.tax[i] * 2}</span>` : ""}</div>`).join("") || '<div class="pc empty"></div>'}</div><span>Zona de mando</span>`;
   const opps = (R.order || []).filter(id => id !== ME.id);
   $("#lifeBox").innerHTML = `
+    ${G.dead ? `<div class="ldead">Eliminado: ${esc(G.dead)}</div>` : ""}
     <div class="lrow"><button class="btn sm" data-life="-1">−</button><span class="lnum${G.life <= 0 ? " bad" : ""}">${G.life}</span><button class="btn sm" data-life="1">+</button></div>
     <div class="lsub"><span>Veneno</span><button class="linkbtn" data-poison="-1">−</button><b class="${G.poison >= 10 ? "bad" : ""}">${G.poison}</b><button class="linkbtn" data-poison="1">+</button></div>
     ${opps.map(id => { const n = G.cmdDmg[id] || 0; return `<div class="lsub" title="Daño que te ha hecho el comandante de ${esc(nameOf(id))}"><span>⚔ ${esc(nameOf(id))}</span><button class="linkbtn" data-cdmg="${esc(id)}" data-d="-1">−</button><b class="${n >= 21 ? "bad" : ""}">${n}</b><button class="linkbtn" data-cdmg="${esc(id)}" data-d="1">+</button></div>`; }).join("")}`;
@@ -469,9 +477,7 @@ function bindTable() {
   bindMull();
   $("#passTurn").addEventListener("click", () => {
     if (activeId() !== ME.id) return;
-    R = { ...R, v: R.v + 1, turn: R.turn + 1, turnNo: R.turnNo + 1 };
-    addLog(`pasa el turno a ${nameOf(activeId())}`);
-    net.send("room", { R }); onRoomState();
+    passTurn();
   });
   $("#untapAll").addEventListener("click", () => { G.bf.forEach(b => b.t = false); addLog("endereza sus permanentes"); changed(); });
   $("#diceBtn").addEventListener("click", e => menu(e, [
@@ -502,11 +508,11 @@ function bindTable() {
   $("#lifeBox").addEventListener("click", e => {
     if (!G) return;
     const l = e.target.closest("[data-life]"), p = e.target.closest("[data-poison]"), cd = e.target.closest("[data-cdmg]");
-    if (l) { G.life += +l.dataset.life; lifeLog(); changed(); }
-    if (p) { G.poison = Math.max(0, G.poison + +p.dataset.poison); addLog(`tiene ${G.poison} contadores de veneno`); changed(); }
+    if (l) { G.life += +l.dataset.life; lifeLog(); checkDeath(); changed(); }
+    if (p) { G.poison = Math.max(0, G.poison + +p.dataset.poison); addLog(`tiene ${G.poison} contadores de veneno`); checkDeath(); changed(); }
     if (cd) {
       const id = cd.dataset.cdmg, d = +cd.dataset.d, now = Math.max(0, (G.cmdDmg[id] || 0) + d);
-      if (now !== (G.cmdDmg[id] || 0)) { G.cmdDmg[id] = now; G.life -= d; addLog(`recibe daño de comandante de ${nameOf(id)}: ${now} en total (vidas ${G.life})`); changed(); }
+      if (now !== (G.cmdDmg[id] || 0)) { G.cmdDmg[id] = now; G.life -= d; addLog(`recibe daño de comandante de ${nameOf(id)}: ${now} en total (vidas ${G.life})`); checkDeath(); changed(); }
     }
   });
 
@@ -570,7 +576,7 @@ const TABLE_KEYS = {
 function onKey(e) {
   if ($("#tableView").hidden || !G || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
-  if (document.querySelector("dialog[open]") || !$("#mull").hidden) return;
+  if (document.querySelector("dialog[open]") || !$("#mull").hidden || !$("#endBox").hidden) return;
   const k = keyName(e);
   if (hoverI && G.cards[hoverI] && where(hoverI)) {
     const act = cardActs(hoverI).find(a => a && a.key === k);
@@ -584,6 +590,64 @@ function onKey(e) {
   const t = TABLE_KEYS[k];
   if (t) { e.preventDefault(); hideMenu(); t(); }
 }
+/* ===================== derrota y victoria ===================== */
+// Pierdes con 0 vidas o menos, 10 contadores de veneno o 21 de daño de un mismo comandante.
+const isDead = id => (id === ME.id ? !!(G && G.dead) : !!(pubs.get(id) || {}).dead);
+function deathReason() {
+  if (G.life <= 0) return "sin vidas";
+  if (G.poison >= 10) return "10 contadores de veneno";
+  const id = Object.keys(G.cmdDmg).find(k => G.cmdDmg[k] >= 21);
+  return id ? `21 de daño del comandante de ${nameOf(id)}` : "";
+}
+let endSeen = "", endKey = "";
+function checkDeath() {
+  if (!G || G.dead) return;
+  const why = deathReason(); if (!why) return;
+  G.dead = why; endSeen = "";
+  addLog(`ha perdido la partida (${why})`);
+  if (activeId() === ME.id) setTimeout(passTurn, 50); // si era su turno, pasa al siguiente
+}
+function revive() {
+  if (!G || !G.dead) return;
+  G.dead = null; G.life = Math.max(G.life, 1); G.poison = Math.min(G.poison, 9);
+  Object.keys(G.cmdDmg).forEach(k => { G.cmdDmg[k] = Math.min(G.cmdDmg[k], 20); });
+  addLog(`vuelve a la partida (había sido un error) con ${G.life} vidas`);
+  changed();
+}
+// Pasa el turno al siguiente jugador que siga vivo.
+function passTurn() {
+  const n = R.order.length; let t = R.turn + 1;
+  for (let k = 0; k < n - 1 && isDead(R.order[t % n]); k++) t++;
+  R = { ...R, v: R.v + 1, turn: t, turnNo: R.turnNo + 1 };
+  addLog(`pasa el turno a ${nameOf(activeId())}`);
+  net.send("room", { R }); onRoomState();
+}
+// Cartel de «Has perdido» (solo para ti) o de «X gana la partida» (para todos).
+function renderEnd() {
+  const box = $("#endBox"), order = R.order || [];
+  const alive = order.filter(id => !isDead(id));
+  let key = "", html = "";
+  if (order.length > 1 && alive.length === 1) {
+    const w = alive[0];
+    key = "win:" + w;
+    html = `<div class="ebox win"><div class="etrophy">🏆</div><h2>${w === ME.id ? "¡Has ganado!" : `${esc(nameOf(w))} gana la partida`}</h2>
+      <p class="muted">${w === ME.id ? "Eres el último en pie." : "Es el último jugador en pie."}</p>
+      <div class="row" style="justify-content:center"><button class="btn primary" data-end="close">Ver la mesa</button>${G && G.dead ? '<button class="btn" data-end="revive">Ha sido un error: volver</button>' : ""}</div></div>`;
+  } else if (G && G.dead) {
+    key = "dead:" + G.dead;
+    html = `<div class="ebox"><div class="etrophy">💀</div><h2>Has perdido</h2><p class="muted">${esc(G.dead[0].toUpperCase() + G.dead.slice(1))}. Puedes seguir mirando la partida.</p>
+      <div class="row" style="justify-content:center"><button class="btn primary" data-end="close">Seguir mirando</button><button class="btn" data-end="revive">Ha sido un error: volver</button></div></div>`;
+  }
+  endKey = key;
+  if (!key) { box.hidden = true; endSeen = ""; return; }
+  if (endSeen === key) { box.hidden = true; return; }
+  box.innerHTML = html; box.hidden = false;
+}
+$("#endBox").addEventListener("click", e => {
+  const b = e.target.closest("[data-end]"); if (!b) return;
+  if (b.dataset.end === "revive") { endSeen = ""; revive(); return; }
+  endSeen = endKey; $("#endBox").hidden = true;
+});
 function lifeLog() { clearTimeout(lifeLog.t); lifeLog.t = setTimeout(() => G && addLog(`tiene ${G.life} vidas`), 900); }
 
 function createToken(name, u, copy) {
