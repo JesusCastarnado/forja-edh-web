@@ -379,6 +379,24 @@ function bindMull() {
   });
 }
 
+/* ===================== coste de maná (mano) ===================== */
+// «{2}{G}{G}» → un círculo con el genérico y uno por cada símbolo de color. Las tierras no llevan.
+function costBadge(name) {
+  const c = SF.cached(name); if (!c || !c.cost) return "";
+  const syms = String(c.cost).split(" // ")[0].match(/\{[^}]+\}/g) || [];
+  if (!syms.length) return "";
+  let generic = 0, x = "";
+  const out = [];
+  for (const s of syms) {
+    const v = s.slice(1, -1).toUpperCase();
+    if (/^\d+$/.test(v)) generic += +v;
+    else if (v === "X") x += "X";
+    else { const col = (v.match(/[WUBRGC]/) || ["C"])[0]; out.push(`<span class="mc mc${col}">${col === "C" ? "◇" : col}</span>`); }
+  }
+  const lead = (x ? `<span class="mc mcN">${x}</span>` : "") + (generic ? `<span class="mc mcN">${generic}</span>` : "");
+  return `<span class="mcost" aria-hidden="true">${lead}${out.join("")}</span>`;
+}
+
 /* ===================== imágenes ===================== */
 const waiting = new Set(); let resolveTimer = null;
 function img(name, size) {
@@ -456,14 +474,23 @@ function renderMine() {
     const c = G.cards[b.i];
     return `<div class="pc own${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-i="${b.i}" data-z="bf" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(c.n, c.u)}>${b.f ? "" : cardImg(c.n, c.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}${c.tok ? '<span class="tokb">Ficha</span>' : ""}</div>`;
   }).join("") || '<p class="muted bfmsg">Tu campo de batalla: arrastra aquí las cartas de tu mano.</p>';
-  $("#hand").innerHTML = G.hand.map(i => `<div class="pc own" data-i="${i}" data-z="hand"${zoomAttr(G.cards[i].n, G.cards[i].u)}>${cardImg(G.cards[i].n, G.cards[i].u)}</div>`).join("");
-  $("#hand").style.setProperty("--n", Math.max(G.hand.length, 1));
+  // Mano en abanico: cada carta un poco girada y más baja cuanto más lejos del centro, con su coste encima.
+  const n = G.hand.length, mid = (n - 1) / 2, step = Math.min(4, 36 / Math.max(n, 1));
+  $("#hand").innerHTML = G.hand.map((i, k) => {
+    const c = G.cards[i], off = k - mid;
+    return `<div class="hc" style="--r:${(off * step).toFixed(2)}deg;--dy:${(off * off * step * 0.35).toFixed(1)}px;z-index:${k + 1}">${costBadge(c.n)}<div class="pc own" data-i="${i}" data-z="hand"${zoomAttr(c.n, c.u)}>${cardImg(c.n, c.u)}</div></div>`;
+  }).join("") + `<span class="zpill hpill" title="Cartas en tu mano">MANO <b>${n}</b></span>`;
+  $("#hand").style.setProperty("--n", Math.max(n, 1));
   const top = z => G[z].length ? G[z][G[z].length - 1] : null, gt = top("gy"), et = top("ex");
+  const pill = (z, label, count, title) => `<button class="zpill" data-zmenu="${z}" title="${title}">${label}${count != null ? ` <b>${count}</b>` : ""} <span class="zcar">▾</span></button>`;
+  const topCard = (i, z) => i ? `<div class="pc own" data-i="${i}" data-z="${z}"${zoomAttr(G.cards[i].n)}>${cardImg(G.cards[i].n)}</div>` : "";
   $("#zones").innerHTML = `
-    <div class="zone" data-drop="lib" data-zone="lib" title="Pulsa para robar · clic derecho: más opciones"><div class="pc back${G.lib.length ? "" : " empty"}" data-i="${G.lib[0] || ""}" data-z="lib"></div><span>Biblioteca ${G.lib.length}</span></div>
-    <div class="zone" data-drop="gy" data-zone="gy" title="Pulsa para verlo">${gt ? `<div class="pc own" data-i="${gt}" data-z="gy"${zoomAttr(G.cards[gt].n)}>${cardImg(G.cards[gt].n)}</div>` : '<div class="pc empty"></div>'}<span>Cementerio ${G.gy.length}</span></div>
-    <div class="zone" data-drop="ex" data-zone="ex" title="Pulsa para verlo">${et ? `<div class="pc own" data-i="${et}" data-z="ex"${zoomAttr(G.cards[et].n)}>${cardImg(G.cards[et].n)}</div>` : '<div class="pc empty"></div>'}<span>Exilio ${G.ex.length}</span></div>`;
-  $("#cmdz").innerHTML = `<div class="czc">${G.cz.map(i => `<div class="pc own" data-i="${i}" data-z="cz"${zoomAttr(G.cards[i].n)} title="Doble clic para lanzarlo">${cardImg(G.cards[i].n)}${G.tax[i] ? `<span class="badge">+${G.tax[i] * 2}</span>` : ""}</div>`).join("") || '<div class="pc empty"></div>'}</div><span>Zona de mando</span>`;
+    <div class="zone" data-drop="lib" data-zone="lib" title="Pulsa para robar · clic derecho: más opciones">${pill("lib", "BIB", G.lib.length, "Biblioteca: robar, barajar, buscar…")}<div class="ztile">${G.lib.length ? `<div class="pc back" data-i="${G.lib[0]}" data-z="lib"></div>` : ""}</div></div>
+    <div class="zone" data-drop="gy" data-zone="gy" title="Pulsa para verlo">${pill("gy", "CEM", G.gy.length, "Ver tu cementerio")}<div class="ztile">${topCard(gt, "gy")}</div></div>
+    <div class="zone" data-drop="ex" data-zone="ex" title="Pulsa para verlo">${pill("ex", "EXILIO", G.ex.length, "Ver tu exilio")}<div class="ztile">${topCard(et, "ex")}</div></div>`;
+  const tax = G.cz.reduce((a, i) => a + (G.tax[i] || 0), 0);
+  $("#cmdz").innerHTML = `${pill("cz", "CMD", null, "Zona de mando: lanzar tu comandante")}<div class="ztile czt">${G.cz.map(i => `<div class="pc own" data-i="${i}" data-z="cz"${zoomAttr(G.cards[i].n)} title="Doble clic para lanzarlo">${cardImg(G.cards[i].n)}${G.tax[i] ? `<span class="badge">+${G.tax[i] * 2}</span>` : ""}</div>`).join("")}</div>`;
+  $("#cmdz").title = tax ? "Impuesto de comandante acumulado" : "";
   const opps = (R.order || []).filter(id => id !== ME.id);
   $("#lifeBox").innerHTML = `
     ${G.dead ? `<div class="ldead">Eliminado: ${esc(G.dead)}</div>` : ""}
@@ -524,6 +551,15 @@ function bindTable() {
   });
 
   // Zonas: clic en la biblioteca roba; en cementerio/exilio abre el visor.
+  // Etiquetas de las zonas (BIB, CEM, EXILIO, CMD): abren su menú.
+  document.addEventListener("click", e => {
+    const p = e.target.closest("[data-zmenu]"); if (!p || !G) return;
+    e.preventDefault(); e.stopPropagation();
+    const z = p.dataset.zmenu;
+    if (z === "lib") libMenu(e);
+    else if (z === "gy" || z === "ex") openZone(z);
+    else if (z === "cz") menu(e, G.cz.length ? G.cz.map(i => [`Lanzar ${G.cards[i].n}${G.tax[i] ? ` (impuesto +${G.tax[i] * 2})` : ""}`, () => move(i, "bf")]) : [["Tu comandante está en el campo", () => {}]]);
+  }, true);
   $("#zones").addEventListener("click", e => {
     if (!G || e.defaultPrevented) return;
     const z = e.target.closest("[data-zone]"); if (!z) return;
