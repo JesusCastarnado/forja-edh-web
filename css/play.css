@@ -70,11 +70,11 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 
 /* mi campo */
 .bf{position:relative;container-type:size;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.18);min-height:0;overflow:hidden}
-.bf .pc{position:absolute;width:min(8.6cqw,25.5cqh);cursor:grab;transition:transform .15s}
+.bf .pc{position:absolute;width:min(6.5cqw,21cqh,78px);cursor:grab;transition:transform .15s}
 .bf .pc.tap{transform:rotate(90deg)}
 .bfmsg{position:absolute;inset:0;display:grid;place-items:center;margin:0;text-align:center;padding:20px}
 .dropover{outline:2px dashed var(--accent);outline-offset:-3px}
-.phand{--hh:clamp(90px,17vh,170px);flex:1;display:flex;justify-content:center;align-items:flex-end;height:var(--hh);padding:0 10px;min-width:0;container-type:inline-size}
+.phand{--hh:clamp(80px,13vh,124px);flex:1;display:flex;justify-content:center;align-items:flex-end;height:var(--hh);padding:0 10px;min-width:0;container-type:inline-size}
 .hrow{grid-column:1/-1;display:flex;gap:8px;align-items:flex-end;min-width:0}
 .phand .pc{height:var(--hh);width:calc(var(--hh) * .716);flex:none;cursor:grab;transition:transform .12s;
   margin-left:min(4px, (100cqw - var(--n) * var(--hh) * .716) / max(var(--n) - 1, 1))}
@@ -103,7 +103,7 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 .olife{font-family:var(--f-display);font-size:20px;color:var(--accent);margin-left:4px}
 .ocount{font-size:12px;color:var(--muted)}
 .obody{flex:1;min-height:0;display:flex;gap:4px;padding:4px}
-.ocz{display:flex;flex-direction:column;gap:4px;width:13%;flex:none}
+.ocz{display:flex;flex-direction:column;gap:4px;width:min(13%,84px);flex:none}
 .ocz .pc{width:100%}
 .obf{position:relative;flex:1;container-type:size;min-height:0}
 .obf .pc{position:absolute;width:min(8.6cqw,25.5cqh)}

@@ -320,8 +320,8 @@ function move(i, to, opts = {}) {
 function freeSpot(c) {
   const sc = SF.cached(c.n), land = sc && A.isLand(sc);
   const y = land ? 0.62 : (sc && /Creature/.test(sc.type) ? 0.02 : 0.32);
-  for (let x = 0.01; x < 0.9; x += 0.075) {
-    if (!G.bf.some(b => Math.abs(b.x - x) < 0.05 && Math.abs(b.y - y) < 0.12)) return { x, y };
+  for (let x = 0.01; x < 0.92; x += 0.06) {
+    if (!G.bf.some(b => Math.abs(b.x - x) < 0.045 && Math.abs(b.y - y) < 0.12)) return { x, y };
   }
   return { x: 0.01 + Math.random() * 0.8, y: Math.min(0.62, y + 0.06) };
 }
@@ -723,7 +723,8 @@ function bindDrag() {
       if (s.z === "lib" && to === "hand") draw(1);
       else if (to === "bf") {
         const r = $("#bf").getBoundingClientRect();
-        const x = Math.max(0, Math.min(0.94, (e.clientX - s.dx - r.left) / r.width)), y = Math.max(0, Math.min(0.66, (e.clientY - s.dy - r.top) / r.height));
+        const bw = Math.min(s.w, s.h) / r.width, bh = Math.max(s.w, s.h) / r.height; // tamaño de una carta del campo (aprox.)
+        const x = Math.max(0, Math.min(1 - Math.min(bw, 0.06), (e.clientX - s.dx - r.left) / r.width)), y = Math.max(0, Math.min(1 - Math.min(bh, 0.3), (e.clientY - s.dy - r.top) / r.height));
         const b = G.bf.find(q => q.i === s.i);
         if (b) { b.x = x; b.y = y; changed(); }
         else move(s.i, "bf", { x, y });
