@@ -8,7 +8,7 @@ export const KINDS = { idea: "Idea", fallo: "Algo no funciona", otro: "Otra cosa
 export const STATUS = { nueva: "Enviada", vista: "Leída", hecha: "¡Hecha!", descartada: "Descartada" };
 const NAME = "forja-autor";
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
-export const fbHint = e => /feedback|42P01|PGRST20/.test(String((e && e.message) || e) + (e && e.code))
+export const fbHint = e => /PGRST205|42P01|Could not find the table/.test(String((e && e.message) || e) + (e && e.code))
   ? "Las sugerencias aún no están activadas: hay que ejecutar supabase/schema.sql en el SQL Editor de Supabase."
   : String((e && e.message) || e);
 const when = t => new Date(t).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
