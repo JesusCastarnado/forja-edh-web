@@ -13,6 +13,7 @@ import * as Cloud from "./cloud.js";
 import { initShared, showShared } from "./shared.js";
 import * as Combos from "./combos.js";
 import * as Edh from "./edhrec.js";
+import * as Trim from "./trim.js";
 import { initCompare, showCompare, compareTexts } from "./compare.js";
 import { initGoldfish, showGoldfish } from "./goldfish.js";
 import { initCollection, showCollection, renderColDeck as colDeckHTML, deckMissingCount } from "./colview.js";
@@ -66,7 +67,7 @@ document.addEventListener("mousemove", e => {
 document.addEventListener("mouseout", e => { if (e.target.closest("[data-name]")) peek.hidden = true; });
 
 const zoom = $("#zoom");
-function openZoom(c) {
+function openZoom(c, { token = false } = {}) {
   peek.hidden = true;
   zoom.innerHTML = `<div class="box">
     <div class="imgs">${c.img ? `<img src="${esc(c.img)}" alt="${esc(c.name)}">` : ""}${c.back ? `<img src="${esc(c.back)}" alt="Cara trasera">` : ""}</div>
@@ -75,8 +76,8 @@ function openZoom(c) {
       <div class="typeline">${esc(c.type)}${c.sub ? " — " + esc(c.sub) : ""}</div>
       <div class="oracle">${esc(c.text)}</div>
       <div class="kv"><div><span>EDHREC</span><b>${c.rank >= 99999 ? "–" : "#" + c.rank}</b></div><div><span>Precio</span><b>${cardMoney(c)}</b></div><div><span>Edición</span><b style="font-family:var(--f-body)">${esc(c.set)}</b></div></div>
-      <p class="small" style="margin:0">${c.legal ? '<span class="ok">Legal en Commander</span>' : isPreview(c) ? `<span class="lo">Preview: sale el ${esc(c.released)}</span>` : '<span class="no">No legal en Commander</span>'}${c.gc ? ' · <span class="tag gc">Game Changer</span>' : ""}</p>
-      <div class="row">${$("#view-guiado").hidden && $("#view-compartido").hidden && deck.cmds.length && !deck.cards.has(A.key(c)) && !deck.cmds.some(x => x.name === c.name) ? `<button class="btn primary sm" data-addz="${esc(c.name)}">Añadir al mazo</button>` : ""}<a class="btn sm" href="${esc(c.uri)}" target="_blank" rel="noopener" style="text-decoration:none">Ver en Scryfall</a><button class="btn sm" data-close>Cerrar</button></div>
+      ${token ? '<p class="small muted" style="margin:0">Ficha (no va en el mazo).</p>' : `<p class="small" style="margin:0">${c.legal ? '<span class="ok">Legal en Commander</span>' : isPreview(c) ? `<span class="lo">Preview: sale el ${esc(c.released)}</span>` : '<span class="no">No legal en Commander</span>'}${c.gc ? ' · <span class="tag gc">Game Changer</span>' : ""}</p>`}
+      <div class="row">${!token && $("#view-guiado").hidden && $("#view-compartido").hidden && deck.cmds.length && !deck.cards.has(A.key(c)) && !deck.cmds.some(x => x.name === c.name) ? `<button class="btn primary sm" data-addz="${esc(c.name)}">Añadir al mazo</button>` : ""}<a class="btn sm" href="${esc(c.uri)}" target="_blank" rel="noopener" style="text-decoration:none">Ver en Scryfall</a><button class="btn sm" data-close>Cerrar</button></div>
     </div></div>`;
   zoom.hidden = false;
   zoom.querySelector("[data-close]").focus();
@@ -186,7 +187,7 @@ function render() {
     <div class="cmdcell" ${cmd0 && cmd0.art ? `style="background-image:url('${esc(cmd0.art)}')"` : ""}><div><div class="eyebrow">Comandante</div><div class="cmdname">${deck.cmds.length ? deck.cmds.map(nameBtn).join(" + ") : esc(cmdNames)}</div><div style="margin-top:4px">${deck.cmds.length ? pipsHTML(s.ci) : '<span class="muted small">Elige uno arriba para comprobar la identidad de color.</span>'}</div></div></div>
     <div><div class="eyebrow">Nota</div><div class="big grade">${s.grade}</div><div class="muted small">${s.level} · ${s.score}/100</div></div>
     <div><div class="eyebrow">Bracket estimado</div><div class="big">B${s.bracket}</div><div class="muted small">${A.BRK[s.bracket]} · ${s.gc.length} Game Changers${s.twoCard ? ` · ${s.twoCard} ${s.twoCard === 1 ? "combo" : "combos"} de 2 cartas` : ""}</div></div>
-    <div><div class="eyebrow">Cartas</div><div class="big mono ${s.total === 100 ? "" : "no"}">${s.total}</div><div class="muted small">${s.total === 100 ? "Mazo completo" : s.total < 100 ? `Faltan ${100 - s.total}` : `Sobran ${s.total - 100}`}</div></div>
+    <div><div class="eyebrow">Cartas</div><div class="big mono ${s.total === 100 ? "" : "no"}">${s.total}</div><div class="muted small">${s.total === 100 ? "Mazo completo" : s.total < 100 ? `Faltan ${100 - s.total}` : `Sobran ${s.total - 100} · <a href="#" data-trimgo>ajustar</a>`}</div></div>
     <div><div class="eyebrow">Precio aprox.</div><div class="big mono">${money(s.price)}</div><div class="muted small">CMC medio ${s.avgCmc.toFixed(2)}</div></div>`;
 
   const groups = {};
@@ -243,8 +244,45 @@ function render() {
   renderSavedNote();
   renderNews(s.ci);
   renderCombos(k);
+  renderTokens(k);
   renderColDeck();
 }
+
+/* ---------- fichas del mazo (Scryfall: qué fichas crea cada carta) ---------- */
+let tokKey = "", tokData = null, tokTimer = null;
+function renderTokens(k) {
+  const el = $("#tokens"), cnt = $("#tokCount");
+  if (!deck.cards.size && !deck.cmds.length) { tokKey = ""; tokData = null; el.innerHTML = '<p class="muted small" style="margin:0">Analiza un mazo para ver las fichas que crea.</p>'; cnt.textContent = ""; return; }
+  if (k === tokKey) { if (tokData) paintTokens(); return; }
+  tokKey = k; tokData = null; clearTimeout(tokTimer);
+  el.innerHTML = thinking("Buscando las fichas en Scryfall…"); cnt.textContent = "";
+  tokTimer = setTimeout(async () => {
+    try {
+      const data = await SF.tokensOf([...deck.cmds, ...[...deck.cards.values()].map(e => e.c)]);
+      if (tokKey !== k) return;
+      tokData = data; paintTokens();
+    } catch (e) {
+      if (tokKey === k) el.innerHTML = `<p class="no small" style="margin:0">No se pudieron buscar las fichas: ${esc(e.message || e)}</p>`;
+    }
+  }, 600);
+}
+function paintTokens() {
+  const el = $("#tokens");
+  $("#tokCount").textContent = tokData.length ? `${tokData.length} ${tokData.length === 1 ? "distinta" : "distintas"}` : "";
+  if (!tokData.length) { el.innerHTML = '<p class="muted small" style="margin:0">Ninguna carta del mazo crea fichas.</p>'; return; }
+  el.innerHTML = `<div class="tokgrid">${tokData.map((x, k) => `<button class="tokc" data-tokz="${k}" title="${esc(x.t.name)} · la crean: ${esc(x.by.join(", "))}">
+      ${x.t.small ? `<img src="${esc(x.t.small)}" alt="${esc(x.t.name)}" loading="lazy">` : `<span class="noimg">${esc(x.t.name)}</span>`}
+      <span class="tokn">${esc(x.t.name)}</span><span class="tokby">${esc(x.by.length === 1 ? x.by[0] : `${x.by.length} cartas`)}</span></button>`).join("")}</div>
+    <p class="muted small" style="margin:8px 0 0">Las fichas (y emblemas) que crean las cartas de tu mazo, según Scryfall. Útil para tenerlas preparadas o imprimirlas. Pulsa una para verla.</p>`;
+}
+$("#tokens").addEventListener("click", e => {
+  const b = e.target.closest("[data-tokz]"); if (!b || !tokData) return;
+  const x = tokData[+b.dataset.tokz]; if (!x) return;
+  openZoom(x.t, { token: true });
+  const p = document.createElement("p"); p.className = "small"; p.style.margin = "0";
+  p.innerHTML = `<b>La crean:</b> ${x.by.map(esc).join(", ")}`;
+  zoom.querySelector(".oracle").after(p);
+});
 function rowHTML(c, q, bad, isCmd) {
   return `<div class="card${bad ? " bad" : ""}"><span class="q">${q}</span>${nameBtn(c)}<span>${tagsHTML(c)} ${manaHTML(c.cost)}</span>${isCmd ? "<span></span>" : `<button class="x" data-rm="${esc(c.name)}" aria-label="Quitar ${esc(c.name)}">×</button>`}</div>`;
 }
@@ -972,6 +1010,54 @@ $("#btnQuick").onclick = async () => {
     <div class="sugg"><div><div class="eyebrow">Candidatas a cortar</div>${weak.map(c => sugHTML({ c, motivo: weakWhy(c) }, "cut")).join("")}</div>
     <div><div class="eyebrow">Añadir</div>${sugg.map(x => sugHTML(x, "add")).join("") || '<p class="muted">El esqueleto ya cumple las cifras recomendadas.</p>'}</div></div>`;
 };
+
+/* ---------- ajustar a 100 ---------- */
+// Si el mazo tiene más de 100 cartas (por ejemplo, porque has añadido ideas), propone qué quitar y por qué.
+// Sin IA: esqueleto, EDHREC de tu comandante, combos y coste (js/trim.js). Nada se quita hasta que lo confirmas.
+let trim = null;
+async function runTrim() {
+  const out = $("#aiOut");
+  if (!deck.cards.size) { out.innerHTML = '<p class="lo">Primero analiza un mazo.</p>'; return; }
+  const total = A.analyze(deck).total;
+  if (total <= 100) { out.innerHTML = `<p style="margin:0">El mazo tiene ${total} cartas: no sobra ninguna.${total < 100 ? ` Faltan ${100 - total}; prueba «Sugerencias rápidas».` : ""}</p>`; return; }
+  $("#aiPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  out.innerHTML = thinking("Mirando qué cartas encajan menos con tu comandante…");
+  const edh = await edhFor(deck.cmds);
+  const r = Trim.trimPlan(deck, { edh: edhMap(edh), words: A.synergyWords(deck.cmds), combos: comboKey === A.deckToText(deck) ? comboData : null });
+  trim = { list: [...r.picks.map(x => ({ ...x, on: true })), ...r.alts.map(x => ({ ...x, on: false }))], over: r.over, edh: !!edh, firstAlt: r.alts.length ? r.picks.length : -1 };
+  renderTrim();
+}
+function renderTrim() {
+  const out = $("#aiOut"); if (!trim) return;
+  const sel = trim.list.filter(x => x.on).reduce((n, x) => n + x.q, 0);
+  const row = (x, k) => `<label class="sug${x.on ? "" : " off"}">${x.c.small ? `<img class="th" src="${esc(x.c.small)}" alt="" loading="lazy">` : '<span class="th"></span>'}
+      <span>${nameBtn(x.c)}${x.q > 1 ? ` <span class="qn">×${x.q}</span>` : ""} ${manaHTML(x.c.cost)}${x.forced ? ' <span class="tag no">obligatoria</span>' : ""}</span>
+      <input type="checkbox" data-trim="${k}"${x.on ? " checked" : ""} aria-label="Quitar ${esc(x.c.name)}"><span class="why">${esc(x.motivo)}</span></label>`;
+  out.innerHTML = `<p style="margin:0">Tu mazo tiene <b>${trim.over + 100}</b> cartas: sobran <b>${trim.over}</b>. Te propongo quitar estas${trim.edh ? ", mirando qué juega la gente con tu comandante (EDHREC)," : ""} sin dejar cojo el esqueleto (tierras, ramp, robo, interacción) y sin tocar las piezas de tus combos. Desmarca las que quieras conservar y marca otras de abajo.</p>
+    <div class="trimlist">${trim.list.map((x, k) => k === trim.firstAlt ? `<div class="eyebrow" style="margin-top:10px">Otras que podrías quitar</div>${row(x, k)}` : row(x, k)).join("")}</div>
+    <div class="trimsum"><span class="grow small ${sel === trim.over ? "ok" : "lo"}">Marcadas: ${sel} de ${trim.over}${sel > trim.over ? ` (te quedarías con ${100 - (sel - trim.over)})` : sel < trim.over ? ` (aún sobrarían ${trim.over - sel})` : " · el mazo queda en 100"}</span>
+      <button class="btn primary" id="trimApply"${sel ? "" : " disabled"}>Quitar las marcadas</button></div>`;
+}
+$("#btnTrim").onclick = runTrim;
+document.addEventListener("click", e => { if (e.target.closest("[data-trimgo]")) { e.preventDefault(); runTrim(); } });
+$("#aiOut").addEventListener("change", e => {
+  const cb = e.target.closest("[data-trim]"); if (!cb || !trim) return;
+  trim.list[+cb.dataset.trim].on = cb.checked; renderTrim();
+});
+$("#aiOut").addEventListener("click", e => {
+  if (e.target.closest(".trimlist .cn")) { e.preventDefault(); return; } // el nombre abre la carta, no marca la casilla
+  if (!e.target.closest("#trimApply") || !trim) return;
+  const gone = [];
+  for (const x of trim.list.filter(y => y.on)) {
+    const k = A.key(x.c), en = deck.cards.get(k); if (!en) continue;
+    const q = Math.min(x.q, en.q);
+    if (en.q - q <= 0) deck.cards.delete(k); else en.q -= q;
+    gone.push(q > 1 ? `${q} ${x.c.name}` : x.c.name);
+  }
+  trim = null; syncText(); render();
+  const total = A.analyze(deck).total;
+  $("#aiOut").innerHTML = `<p style="margin:0" class="${total === 100 ? "ok" : "lo"}">Quitadas ${gone.length} ${gone.length === 1 ? "carta" : "cartas"}: ${esc(gone.join(", "))}. El mazo tiene ahora ${total} cartas.</p><p class="muted small" style="margin:6px 0 0">Si está en «Mis mazos», pulsa «Guardar cambios» para guardarlo (la versión anterior queda en su historial).</p>`;
+});
 
 /* ---------- mazo a presupuesto ---------- */
 let swaps = [];

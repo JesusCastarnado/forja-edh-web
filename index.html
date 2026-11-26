@@ -98,6 +98,7 @@
           <button class="btn primary ai" id="btnOpt">Optimizar con IA</button>
           <button class="btn ai" id="btnGuide" title="Una guía para compartir: plan, mulligan, cómo jugarlo y cartas clave">Guía del mazo</button>
           <button class="btn" id="btnQuick">Sugerencias rápidas</button>
+          <button class="btn" id="btnTrim" title="Si el mazo tiene más de 100 cartas, propone cuáles quitar y por qué">Ajustar a 100</button>
           <button class="btn" id="btnBudget" title="Cambia las cartas caras por otras baratas de la misma función">A presupuesto</button>
           <label class="f inline" for="optBracket">Bracket objetivo
             <select id="optBracket"><option value="">Mantener</option><option value="2">B2 Core</option><option value="3">B3 Upgraded</option><option value="4">B4 Optimized</option><option value="5">B5 cEDH</option></select></label>
@@ -122,6 +123,10 @@
       <div class="panel">
         <div class="row between"><h3 style="margin:0">Combos</h3><a class="small" href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a></div>
         <div id="combos" style="margin-top:10px"></div>
+      </div>
+      <div class="panel">
+        <div class="row between"><h3 style="margin:0">Fichas del mazo</h3><span class="muted small" id="tokCount"></span></div>
+        <div id="tokens" style="margin-top:10px"></div>
       </div>
       <div class="panel"><h3>Tu colección</h3><div id="colDeck"></div></div>
     </div>

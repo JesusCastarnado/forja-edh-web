@@ -995,7 +995,17 @@ function bindTable() {
     ["Tirar un d20", () => addLog(`tira un d20: ${1 + Math.floor(Math.random() * 20)}`)],
     ["Lanzar una moneda", () => addLog(`lanza una moneda: ${Math.random() < 0.5 ? "cara" : "cruz"}`)],
   ]));
-  $("#tokenBtn").addEventListener("click", () => { $("#tokenDlg").showModal(); $("#tokenQ").focus(); });
+  $("#tokenBtn").addEventListener("click", async () => {
+    $("#tokenDlg").showModal(); $("#tokenQ").focus();
+    // Antes de buscar, las fichas que crean las cartas de tu mazo (según Scryfall).
+    if ($("#tokenQ").value.trim() || !G) return;
+    $("#tokenGrid").innerHTML = '<p class="muted small">Buscando las fichas de tu mazo…</p>';
+    const mine = await SF.tokensOf(Object.values(G.cards).filter(c => !c.tok).map(c => SF.cached(c.n)).filter(Boolean)).catch(() => []);
+    if ($("#tokenQ").value.trim()) return; // mientras tanto ha buscado otra
+    $("#tokenGrid").innerHTML = mine.length
+      ? `<p class="muted small" style="grid-column:1/-1;margin:0">Fichas de tu mazo (o busca otra arriba):</p>` + mine.map(x => `<button class="pvcard" data-tok="${esc(x.t.name)}" data-tu="${esc(x.t.img || x.t.small)}" title="La crean: ${esc(x.by.join(", "))}"><img src="${esc(x.t.small)}" alt="${esc(x.t.name)}"><span>${esc(x.t.name)}</span></button>`).join("")
+      : '<p class="muted small">Ninguna carta de tu mazo crea fichas. Busca una arriba (en inglés).</p>';
+  });
   $("#tokenForm").addEventListener("submit", async e => {
     e.preventDefault(); const q = $("#tokenQ").value.trim(); if (!q) return;
     $("#tokenGrid").innerHTML = '<p class="muted small">Buscando…</p>';
