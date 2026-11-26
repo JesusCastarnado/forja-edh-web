@@ -329,18 +329,31 @@ function blocksOf(id) {
   return b && b.cid === cid() && Array.isArray(b.list) ? { list: b.list, done: !!b.done } : { list: [], done: false };
 }
 // Fuerza, resistencia, lealtad y habilidades de una carta del campo (mía o de otro).
-function statsOf(n, tf, f, cnt, cmd) {
-  if (f || !n) return { name: "una carta boca abajo", type: "Creature", isCr: true, isPw: false, pow: 2, tou: 2, loy: 0, kw: [], cmd: false };
+// cnt: contadores (+1/+1 en criaturas, lealtad en planeswalkers); pm/tm: cambios a mano de fuerza/resistencia;
+// kx: contadores de habilidad que le has puesto (arrollar, toque mortal…).
+function statsOf(n, tf, f, cnt, cmd, pm = 0, tm = 0, kx = []) {
+  const extra = { pm: pm || 0, tm: tm || 0, kx: kx || [] };
+  if (f || !n) return { name: "una carta boca abajo", type: "Creature", isCr: true, isPw: false, pow: 2 + extra.pm, tou: 2 + extra.tm, base: [2, 2], loy: 0, kw: [...extra.kx], cmd: false, ...extra };
   const c = SF.cached(n), face = c && c.pt ? (c.pt[tf ? 1 : 0] || c.pt[0]) : null;
   const type = (face && face.type) || (c && c.type) || "";
   const isPw = /Planeswalker/.test(type), isCr = /Creature/.test(type) || !!(face && face.pow != null);
-  const plus = isCr ? (cnt || 0) : 0;
-  return { name: faceName(n, tf), type, isCr, isPw, pow: face ? num(face.pow) + plus : 0, tou: face ? num(face.tou) + plus : 0, loy: isPw ? (cnt || 0) : 0, kw: (c && c.kw) || [], cmd: !!cmd };
+  const plus = isCr ? (cnt || 0) : 0, bp = face ? num(face.pow) : 0, bt = face ? num(face.tou) : 0;
+  return { name: faceName(n, tf), type, isCr, isPw, pow: bp + plus + extra.pm, tou: bt + plus + extra.tm, base: [bp, bt], loy: isPw ? (cnt || 0) : 0,
+    kw: [...new Set([...((c && c.kw) || []), ...extra.kx])], cmd: !!cmd, ...extra };
 }
+// Lo que publican los demás ya viene calculado (P/T, habilidades); si no (versión anterior), se calcula aquí.
+function pubStats(b) {
+  if (b.P === undefined) return statsOf(b.n, b.tf, b.f, b.c, b.cmd);
+  const kx = Array.isArray(b.x) ? b.x : [];
+  return { name: b.f ? "una carta boca abajo" : faceName(b.n || "?", b.tf), type: b.bt ? "Battle" : b.pw ? "Planeswalker" : b.P != null ? "Creature" : "",
+    isCr: b.P != null, isPw: !!b.pw, pow: num(b.P), tou: num(b.T), base: [num(b.P) - (b.c || 0) - (b.pm || 0), num(b.T) - (b.c || 0) - (b.tm || 0)],
+    loy: b.pw ? (b.c || 0) : 0, kw: Array.isArray(b.k) ? b.k : [], cmd: !!b.cmd, pm: b.pm || 0, tm: b.tm || 0, kx };
+}
+const ownStats = i => { const b = G && bfOf(i), c = G && G.cards[i]; return b && c ? statsOf(c.n, b.tf, b.f, b.c, c.cmd, b.pm, b.tm, b.kx) : null; };
 function cardInfo(owner, i) {
-  if (owner === ME.id) { const b = G && bfOf(i); if (!b) return null; const c = G.cards[i]; return statsOf(c.n, b.tf, b.f, b.c, c.cmd); }
+  if (owner === ME.id) return ownStats(i);
   const p = pubs.get(owner), b = p && p.bf.find(x => x.i === i);
-  return b ? statsOf(b.n, b.tf, b.f, b.c, b.cmd) : null;
+  return b ? pubStats(b) : null;
 }
 const cardEl = (owner, i) => owner === ME.id ? document.querySelector(`#bf .pc[data-i="${CSS.escape(i)}"]`) : document.querySelector(`#opps .pc[data-oid="${CSS.escape(owner)}"][data-oi="${CSS.escape(i)}"]`);
 // A quién se puede atacar: cada rival vivo y sus planeswalkers (y batallas).
@@ -349,7 +362,7 @@ function attackTargets() {
   for (const id of R.order || []) {
     if (id === ME.id || isDead(id)) continue;
     out.push({ p: id, pw: null, label: nameOf(id) });
-    ((pubs.get(id) || {}).bf || []).forEach(b => { const s = statsOf(b.n, b.tf, b.f, b.c); if (s.isPw || /Battle/.test(s.type)) out.push({ p: id, pw: b.i, label: `${s.name} (de ${nameOf(id)})` }); });
+    ((pubs.get(id) || {}).bf || []).forEach(b => { const s = pubStats(b); if (s.isPw || /Battle/.test(s.type)) out.push({ p: id, pw: b.i, label: `${s.name} (de ${nameOf(id)})` }); });
   }
   return out;
 }
@@ -482,7 +495,9 @@ function openResolve() {
   }).filter(Boolean);
   renderResolve(); $("#combatDlg").showModal();
 }
-const KW_ES = { trample: "arrollar", lifelink: "vínculo vital", deathtouch: "toque mortal", "first strike": "dañar primero", "double strike": "doble daño", infect: "infectar", indestructible: "indestructible", flying: "vuela", vigilance: "vigilancia", menace: "amenaza", reach: "alcance" };
+// Habilidades que entiende la mesa (para el combate y para los contadores de habilidad), con su abreviatura en la carta.
+const KW_ES = { flying: "vuela", "first strike": "dañar primero", "double strike": "doble daño", deathtouch: "toque mortal", lifelink: "vínculo vital", trample: "arrollar", vigilance: "vigilancia", menace: "amenaza", reach: "alcance", indestructible: "indestructible", hexproof: "antimaleficio", haste: "prisa", infect: "infectar" };
+const KW_AB = { flying: "VU", "first strike": "DP", "double strike": "DD", deathtouch: "TM", lifelink: "VV", trample: "AR", vigilance: "VI", menace: "AM", reach: "AL", indestructible: "IN", hexproof: "AN", haste: "PR", infect: "IF" };
 const kwChips = kw => kw.filter(k => KW_ES[k]).map(k => `<span class="tag">${KW_ES[k]}</span>`).join(" ");
 const ptIn = (c, f) => `<input type="number" class="ptin" min="0" max="99" value="${c[f]}" data-ck="${esc(c.key)}" data-cf="${f}" aria-label="${f === "pow" ? "Fuerza" : "Resistencia"} de ${esc(c.name)}">`;
 function renderResolve() {
@@ -684,7 +699,12 @@ function myPub() {
   return {
     id: ME.id, name: ME.name, deck: G.deck, life: G.life, poison: G.poison, cmdDmg: G.cmdDmg,
     lib: G.lib.length, hand: G.hand.length, ready: G.mull.phase === "done", dead: G.dead || null, art: myArt(),
-    bf: G.bf.map(b => ({ i: b.i, n: b.f ? null : C(b.i).n, u: b.f ? null : faceU(C(b.i), b), x: +b.x.toFixed(3), y: +b.y.toFixed(3), t: b.t ? 1 : 0, f: b.f ? 1 : 0, c: b.c || 0, tf: b.tf ? 1 : 0, cmd: C(b.i).cmd ? 1 : 0 })),
+    bf: G.bf.map(b => {
+      const s = ownStats(b.i) || {};
+      // P/T y habilidades ya calculados, para que los demás los vean igual (y el combate los use).
+      return { i: b.i, n: b.f ? null : C(b.i).n, u: b.f ? null : faceU(C(b.i), b), x: +b.x.toFixed(3), y: +b.y.toFixed(3), t: b.t ? 1 : 0, f: b.f ? 1 : 0, c: b.c || 0, tf: b.tf ? 1 : 0, cmd: C(b.i).cmd ? 1 : 0,
+        P: s.isCr ? s.pow : null, T: s.isCr ? s.tou : null, pm: b.pm || 0, tm: b.tm || 0, k: (s.kw || []).filter(k => KW_ES[k]), x: b.kx || [], pw: s.isPw ? 1 : 0, bt: /Battle/.test(s.type || "") ? 1 : 0 };
+    }),
     // Combate: mis atacantes (si es mi turno) y mis bloqueos, del turno actual.
     atk: G.atk && G.atk.cid === cid() ? G.atk : null,
     blk: G.blk && G.blk.cid === cid() ? G.blk : null,
@@ -864,7 +884,18 @@ const artOf = name => { const c = name && SF.cached(name); return (c && c.art) |
 const bgStyle = url => url ? ` style="background-image:url('${esc(url)}')"` : "";
 // Posición de cada panel en la rejilla: los rivales arriba y tú abajo a la izquierda (como en una mesa de cuatro).
 const seatOrder = k => (k < 2 ? k : k + 2);
-const cardOnBoard = (b, owner) => `<div class="pc${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-oid="${esc(owner)}" data-oi="${esc(b.i)}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`;
+// Fuerza/resistencia en la carta (abajo a la derecha). En las mías, clic: +1; clic derecho: −1.
+// Verde si está por encima de lo impreso; rojo si está por debajo.
+function ptHtml(s, own) {
+  if (!s || !s.isCr) return "";
+  const cls = (v, base) => (v > base ? " hi" : v < base ? " lo" : "");
+  const box = (k, v, base, what) => `<b class="ptv${cls(v, base)}"${own ? ` data-pt="${k}" title="${what}: clic +1, clic derecho −1"` : ` title="${what}"`}>${v}</b>`;
+  return `<span class="ptb">${box("p", s.pow, s.base[0], "Fuerza")}${box("t", s.tou, s.base[1], "Resistencia")}</span>`;
+}
+// Contadores de habilidad que se le han puesto (a la izquierda, en columna).
+const kwxHtml = s => s && s.kx && s.kx.length ? `<span class="kwx">${s.kx.filter(k => KW_AB[k]).map(k => `<i title="Contador de ${KW_ES[k]}">${KW_AB[k]}</i>`).join("")}</span>` : "";
+const cardOnBoard = (b, owner) => { const s = pubStats(b);
+  return `<div class="pc${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-oid="${esc(owner)}" data-oi="${esc(b.i)}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}${kwxHtml(s)}${ptHtml(s, false)}</div>`; };
 function renderOpps(ids) {
   $("#opps").innerHTML = ids.map((id, k) => {
     const p = pubs.get(id), on = people.some(x => x.id === id), order = `order:${seatOrder(k)}`;
@@ -919,7 +950,7 @@ function renderMine() {
   $("#mySeatName").innerHTML = `${esc(ME.name || "Tú")} <span class="tag">Tú</span>${G.dead ? ' <span class="tag bad">Eliminado</span>' : ""}`;
   $("#bf").innerHTML = G.bf.map(b => {
     const c = G.cards[b.i], u = faceU(c, b);
-    return `<div class="pc own${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-i="${b.i}" data-z="bf" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(c.n, u)}>${b.f ? "" : cardImg(c.n, u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}${c.tok ? '<span class="tokb">Ficha</span>' : ""}</div>`;
+    return `<div class="pc own${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-i="${b.i}" data-z="bf" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(c.n, u)}>${b.f ? "" : cardImg(c.n, u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}${c.tok ? '<span class="tokb">Ficha</span>' : ""}${kwxHtml(ownStats(b.i))}${ptHtml(ownStats(b.i), true)}</div>`;
   }).join("") || '<p class="muted bfmsg">Tu campo de batalla: arrastra aquí las cartas de tu mano.</p>';
   // Mano en abanico: cada carta un poco girada y más baja cuanto más lejos del centro, con su coste encima.
   const n = G.hand.length, mid = (n - 1) / 2, step = Math.min(4, 36 / Math.max(n, 1));
@@ -1035,6 +1066,9 @@ function bindTable() {
   // Clic en una carta del campo: girar/enderezar.
   $("#bf").addEventListener("click", e => {
     if (justDragged) return;
+    // Clic en el cuadro de fuerza o de resistencia: +1 (no gira la carta).
+    const pt = e.target.closest("[data-pt]");
+    if (pt && G) { const el = pt.closest(".pc[data-i]"); if (el) bumpPT(el.dataset.i, pt.dataset.pt, 1); return; }
     const el = e.target.closest(".pc[data-i]"); if (!el || !G) return;
     const b = G.bf.find(x => x.i === el.dataset.i); if (!b) return;
     b.t = !b.t; addLog(`${b.t ? "gira" : "endereza"} ${b.f ? "una carta boca abajo" : G.cards[b.i].n}`); changed();
@@ -1045,6 +1079,9 @@ function bindTable() {
   // Menú contextual (clic derecho o pulsación larga).
   document.addEventListener("contextmenu", e => {
     if ($("#tableView").hidden) return;
+    // Clic derecho en el cuadro de fuerza o de resistencia de una carta mía: −1.
+    const pt = e.target.closest("#bf [data-pt]");
+    if (pt && G) { e.preventDefault(); const el = pt.closest(".pc[data-i]"); if (el) bumpPT(el.dataset.i, pt.dataset.pt, -1); return; }
     // Cartas y paneles de los demás: señalar (también para quien solo mira).
     const oc = e.target.closest("#opps .pc[data-oi]"), os = e.target.closest("#opps [data-seat]");
     if (oc) { e.preventDefault(); menu(e, [["Señalar esta carta", () => ping(oc.dataset.oid, oc.dataset.oi), "S"], [`Señalar a ${nameOf(oc.dataset.oid)}`, () => ping(oc.dataset.oid)]]); return; }
@@ -1098,7 +1135,7 @@ function onKey(e) {
     if (act) {
       e.preventDefault(); hideMenu();
       const i = hoverI;
-      if (!["G", "+", "-", "V", "C", "T", "S", "K"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
+      if (!["G", "+", "-", "V", "C", "T", "S", "K", "H"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
       act.run(i); return;
     }
   }
@@ -1252,6 +1289,48 @@ function createToken(name, u, copy) {
   addLog(copy ? `crea una copia de ${name}` : `crea una ficha: ${name}`); changed();
 }
 
+/* ===================== fuerza/resistencia a mano y contadores de habilidad ===================== */
+// b.pm / b.tm: lo que has sumado o restado a mano a la fuerza / resistencia (aparte de los contadores +1/+1).
+// b.kx: contadores de habilidad (arrollar, toque mortal…). Todo vale para el combate y lo ven los demás.
+const ptLogT = {};
+function bumpPT(i, which, d) {
+  const b = bfOf(i); if (!b) return;
+  const k = which === "p" ? "pm" : "tm";
+  b[k] = (b[k] || 0) + d;
+  const s = ownStats(i);
+  lastAct = `pone ${s.name} en ${s.pow}/${s.tou}`;
+  changed();
+  // Una sola línea en el registro aunque se pulse varias veces seguidas.
+  clearTimeout(ptLogT[i]); ptLogT[i] = setTimeout(() => { const s2 = ownStats(i); if (s2) addLog(`pone ${s2.name} en ${s2.pow}/${s2.tou}`); }, 900);
+}
+function resetPT(i) {
+  const b = bfOf(i); if (!b) return;
+  b.pm = 0; b.tm = 0; const s = ownStats(i);
+  addLog(`quita los cambios de fuerza/resistencia de ${s.name} (${s.pow}/${s.tou})`); changed();
+}
+function toggleKw(i, k) {
+  const b = bfOf(i); if (!b) return;
+  const on = (b.kx || []).includes(k);
+  b.kx = on ? b.kx.filter(x => x !== k) : [...(b.kx || []), k];
+  addLog(`${on ? "quita" : "pone"} un contador de ${KW_ES[k]} ${on ? "de" : "a"} ${ownStats(i).name}`); changed();
+}
+// Menú de fuerza/resistencia y contadores de habilidad; se vuelve a abrir tras cada cambio para hacer varios seguidos.
+function ptMenu(i, x, y) {
+  const b = bfOf(i); if (!b) return;
+  const s = ownStats(i), again = f => () => { f(); if (bfOf(i)) ptMenu(i, x, y); };
+  const items = [];
+  if (s.isCr) items.push([`Fuerza +1 (${s.pow}/${s.tou})`, again(() => bumpPT(i, "p", 1))], ["Fuerza −1", again(() => bumpPT(i, "p", -1))],
+    ["Resistencia +1", again(() => bumpPT(i, "t", 1))], ["Resistencia −1", again(() => bumpPT(i, "t", -1))]);
+  if (b.pm || b.tm) items.push([`Quitar los cambios (vuelve a ${s.pow - (b.pm || 0)}/${s.tou - (b.tm || 0)})`, () => resetPT(i)]);
+  if (items.length) items.push(null);
+  for (const k of Object.keys(KW_ES)) {
+    const has = (b.kx || []).includes(k), printed = !has && s.kw.includes(k);
+    items.push([`${has ? "✓ " : ""}Contador de ${KW_ES[k]} · ${KW_AB[k]}${printed ? " (ya la tiene)" : ""}`, again(() => toggleKw(i, k))]);
+  }
+  menu(fakeEv(x, y), items);
+}
+function ptKey(i) { const el = cardEl(ME.id, i), r = el ? el.getBoundingClientRect() : { right: innerWidth / 2, top: innerHeight / 2 }; ptMenu(i, r.right, r.top); }
+
 // Acciones sobre una carta mía. `key`: su atajo de teclado (con el ratón encima de la carta).
 // `when(z, c, b)`: si se puede en la zona donde está (b = la carta en el campo, si está ahí).
 const bfOf = i => G.bf.find(x => x.i === i);
@@ -1262,6 +1341,7 @@ const CARD_ACTS = [
   { key: "G", label: b => (b.t ? "Enderezar" : "Girar"), when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.t = !b.t; addLog(`${b.t ? "gira" : "endereza"} ${nameOrHidden(i, b)}`); changed(); } },
   { key: "+", label: "+1 contador", when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.c = (b.c || 0) + 1; addLog(`pone un contador en ${nameOrHidden(i, b)} (${b.c})`); changed(); } },
   { key: "-", label: "−1 contador", when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.c = (b.c || 0) - 1; addLog(`quita un contador de ${nameOrHidden(i, b)} (${b.c})`); changed(); } },
+  { key: "H", label: "Fuerza/resistencia y contadores de habilidad…", when: (z, c, b) => !!b, run: i => ptKey(i) },
   { key: "V", label: b => (b.f ? "Poner boca arriba" : "Poner boca abajo"), when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.f = !b.f; addLog(b.f ? `pone ${G.cards[i].n} boca abajo` : `pone boca arriba ${G.cards[i].n}`); changed(); } },
   { key: "T", label: b => (b.tf ? "Volver a la cara de delante" : "Transformar"), when: (z, c, b) => !!b && !b.f && !!backOf(c.n),
     run: i => { const b = bfOf(i), n = G.cards[i].n; b.tf = !b.tf; addLog(b.tf ? `transforma ${faceName(n)} en ${faceName(n, true)}` : `vuelve ${faceName(n, true)} a su cara de delante (${faceName(n)})`); changed(); } },
@@ -1430,7 +1510,7 @@ let justDragged = false;
 function bindDrag() {
   let st = null;
   document.addEventListener("pointerdown", e => {
-    if (e.button !== 0 || !G || $("#tableView").hidden) return;
+    if (e.button !== 0 || !G || $("#tableView").hidden || e.target.closest("[data-pt]")) return; // los cuadros de P/T no arrastran
     const el = e.target.closest(".pc[data-i]"); if (!el || !el.dataset.i || !el.closest("#zones, #hand, #bf, #cmdz")) return;
     const r = el.getBoundingClientRect();
     st = { el, i: el.dataset.i, z: el.dataset.z, x0: e.clientX, y0: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height, on: false, ghost: null };
