@@ -72,6 +72,15 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 .req .row{display:flex;gap:6px;justify-content:flex-end}
 #joinDlg .grow{flex:1}
 .vfilter{width:100%;margin:0 0 10px}
+/* Mirar las X de arriba: ordenar y elegir a dónde va cada carta */
+.scard{display:grid;gap:4px;font-size:11px;color:var(--muted);text-align:center}
+.scard .pos{font-weight:600;color:var(--fg)}
+.sctrl{display:flex;gap:4px;align-items:center;justify-content:center}
+.sctrl select{font-size:12px;padding:2px 4px;min-width:0;flex:1}
+.sctrl .linkbtn[disabled]{opacity:.3;cursor:default}
+.scard.away img{opacity:.45}
+.vfoot{margin-top:12px;align-items:center}
+.vfoot .grow{flex:1}
 .seat.dead{filter:grayscale(.85);opacity:.55}
 .seat.dead .obf{pointer-events:none}
 .seatbg{position:absolute;inset:0;background:center 30%/cover no-repeat;opacity:.38}

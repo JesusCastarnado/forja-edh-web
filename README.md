@@ -198,7 +198,7 @@ El botón **Jugar** (arriba) abre una página aparte, `jugar.html`, para jugar p
 En la mesa:
 - **Arrastra** las cartas entre la mano, el campo, el cementerio, el exilio, la biblioteca y la zona de mando. Doble clic en una carta de la mano (o en tu comandante) la juega.
 - **Clic** en un permanente lo gira o lo endereza. **Clic derecho** (pulsación larga en el móvil): contadores, boca abajo, copiar como ficha, mandar a otra zona…
-- **Biblioteca**: clic para robar; clic derecho para robar varias, barajar, buscar, mirar las X de arriba, moler, revelar o exiliar. Al ver la biblioteca, el cementerio o el exilio puedes **filtrar** por nombre o tipo (en inglés o con palabras como «criatura», «tierra», «instantáneo»).
+- **Biblioteca**: clic para robar; clic derecho para robar varias, barajar, buscar, mirar las X de arriba, moler, revelar o exiliar. **Mirar las X de arriba** te deja ordenarlas con las flechas (la primera queda arriba del todo) y elegir a dónde va cada una: encima, debajo, cementerio, exilio o mano; se aplica todo junto al pulsar «Hecho» (sirve para adivinar, vigilar y similares). Al ver la biblioteca, el cementerio o el exilio puedes **filtrar** por nombre o tipo (en inglés o con palabras como «criatura», «tierra», «instantáneo»).
 - **Cartas de dos caras**: en el campo, clic derecho → **Transformar** (o tecla `T`) para darles la vuelta; los demás ven la cara nueva. Al salir del campo vuelven a su cara de delante.
 - **Comandante**: si va al cementerio o al exilio vuelve solo a la zona de mando, y cada vez que lo lanzas desde ahí suma el impuesto (+2).
 - **Vidas, veneno y daño de comandante** de cada rival (suma 21 y se marca en rojo). **Fichas** (busca cualquier ficha de Magic por su nombre en inglés) y **dados** (d6, d20 y moneda).

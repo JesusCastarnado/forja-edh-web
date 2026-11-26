@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 37, fecha: "2026-11-26", titulo: "Jugar: mira las de arriba y ordénalas", ir: "jugar.html",
+    texto: "En la mesa, «Mirar las X de arriba» de tu biblioteca ahora te deja ordenarlas y elegir a dónde va cada una (encima, debajo, cementerio, exilio o mano) de una vez, como al adivinar o vigilar. Nada cambia hasta que pulsas «Hecho»." },
   { id: 36, fecha: "2026-11-26", titulo: "Jugar: transforma cartas y busca en tu biblioteca", ir: "jugar.html",
     texto: "Las cartas de dos caras ya se pueden transformar en la mesa (clic derecho → «Transformar» o la tecla T), y los demás ven la cara nueva. Y al buscar en tu biblioteca, cementerio o exilio hay un cuadro para filtrar por nombre o por tipo («Forest», «criatura», «instant»…)." },
   { id: 35, fecha: "2026-11-26", titulo: "Jugar: entra en una partida ya empezada", ir: "jugar.html",

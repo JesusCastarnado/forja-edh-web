@@ -919,7 +919,7 @@ function libMenu(e) {
     ["Barajar", () => { shuffle(G.lib); addLog("baraja su biblioteca"); changed(); }],
     null,
     ["Buscar en la biblioteca", () => { addLog("busca en su biblioteca"); openZone("lib"); }],
-    ["Mirar las X de arriba…", () => { const n = ask("¿Cuántas miras?", "3"); if (n) { addLog(`mira las ${n} cartas de arriba de su biblioteca`); openZone("lib", n); } }],
+    ["Mirar las X de arriba…", () => { const n = Math.min(ask("¿Cuántas miras?", "3"), G.lib.length); if (n) { addLog(`mira las ${n} cartas de arriba de su biblioteca`); openScry(n); } }],
     ["Moler X…", () => { const n = ask("¿Cuántas mueles?", "1"); for (let k = 0; k < n && G.lib.length; k++) move(G.lib[0], "gy"); }],
     ["Revelar la de arriba", () => { if (G.lib[0]) addLog(`revela la carta de arriba de su biblioteca: ${G.cards[G.lib[0]].n}`); }],
     ["Exiliar la de arriba", () => { if (G.lib[0]) move(G.lib[0], "ex"); }],
@@ -947,11 +947,70 @@ function viewer(title, list, zone, note = "") {
   $("#vTitle").textContent = title; $("#vNote").textContent = note;
   $("#vGrid").innerHTML = list.length ? list.map(c => `<button class="pvcard" data-f="${esc(filterText(c.n))}"${c.i ? ` data-vi="${c.i}"` : ""}${zoomAttr(c.n)}>${cardImg(c.n)}<span>${esc(c.n)}</span></button>`).join("") : '<p class="muted small">No hay cartas.</p>';
   const f = $("#vFilter"); f.value = ""; f.hidden = list.length < 6; $("#vNone").hidden = true;
+  scry = null; $("#vFoot").hidden = true;
   dlg.dataset.zone = zone || ""; dlg.dataset.shuffle = note.startsWith("Al cerrar") ? "1" : "";
   if (!dlg.open) dlg.showModal();
   if (!f.hidden) f.focus();
 }
 $("#vFilter").addEventListener("input", applyFilter);
+
+/* ===================== mirar las X de arriba ===================== */
+// Ordenas las cartas (la primera queda arriba del todo) y eliges a dónde va cada una; nada cambia hasta «Hecho».
+let scry = null; // { ids: [en el orden elegido], dest: { id: "top" | "bottom" | "gy" | "ex" | "hand" } }
+const SCRY_DEST = [["top", "Encima"], ["bottom", "Debajo"], ["gy", "Cementerio"], ["ex", "Exilio"], ["hand", "Mano"]];
+function openScry(n) {
+  const ids = G.lib.slice(0, n);
+  viewer(`Las ${n} de arriba de tu biblioteca`, [], "lib", "");
+  scry = { ids, dest: Object.fromEntries(ids.map(i => [i, "top"])) };
+  $("#vFilter").hidden = true;
+  $("#vNote").textContent = "Ordénalas con las flechas (la primera queda arriba del todo) y elige a dónde va cada una. Si cierras sin pulsar «Hecho», se quedan como estaban.";
+  renderScry();
+}
+function renderScry() {
+  if (!scry) return;
+  const { ids, dest } = scry;
+  const tops = ids.filter(i => dest[i] === "top"), bots = ids.filter(i => dest[i] === "bottom");
+  $("#vGrid").innerHTML = ids.map((i, k) => {
+    const d = dest[i], pos = d === "top" ? `${tops.indexOf(i) + 1}.º arriba` : d === "bottom" ? `${bots.indexOf(i) + 1}.º debajo` : SCRY_DEST.find(x => x[0] === d)[1];
+    return `<div class="scard${d === "top" ? "" : " away"}"${zoomAttr(G.cards[i].n)}>${cardImg(G.cards[i].n)}
+      <span class="pos">${esc(pos)}</span>
+      <div class="sctrl"><button class="linkbtn" data-smv="${k}" data-d="-1" ${k ? "" : "disabled"} aria-label="Mover a la izquierda">◀</button>
+        <select data-sd="${i}">${SCRY_DEST.map(([v, l]) => `<option value="${v}"${v === d ? " selected" : ""}>${l}</option>`).join("")}</select>
+        <button class="linkbtn" data-smv="${k}" data-d="1" ${k < ids.length - 1 ? "" : "disabled"} aria-label="Mover a la derecha">▶</button></div></div>`;
+  }).join("");
+  const cnt = d => ids.filter(i => dest[i] === d).length;
+  $("#vSum").textContent = SCRY_DEST.map(([v, l]) => cnt(v) ? `${l}: ${cnt(v)}` : "").filter(Boolean).join(" · ");
+  $("#vFoot").hidden = false;
+}
+$("#vGrid").addEventListener("click", e => {
+  const b = e.target.closest("[data-smv]"); if (!b || !scry) return;
+  const k = +b.dataset.smv, j = k + +b.dataset.d, a = scry.ids;
+  if (j < 0 || j >= a.length) return;
+  [a[k], a[j]] = [a[j], a[k]]; renderScry();
+});
+$("#vGrid").addEventListener("change", e => {
+  const s = e.target.closest("[data-sd]"); if (!s || !scry) return;
+  scry.dest[s.dataset.sd] = s.value; renderScry();
+});
+$("#scryDone").addEventListener("click", () => {
+  const s = scry; scry = null; $("#viewer").close();
+  if (!s || !G) return;
+  // Solo las que siguen en la biblioteca (por si algo cambió mientras mirabas).
+  const ids = s.ids.filter(i => G.lib.includes(i));
+  const by = d => ids.filter(i => s.dest[i] === d);
+  const tops = by("top"), bots = by("bottom");
+  // A otras zonas, con su entrada en el registro (el cementerio y el exilio son públicos).
+  for (const d of ["gy", "ex", "hand"]) by(d).forEach(i => move(i, d, { force: true, quiet: true }));
+  G.lib = [...tops, ...G.lib.filter(i => !tops.includes(i) && !bots.includes(i)), ...bots];
+  const nm = i => G.cards[i].n, parts = [];
+  if (tops.length) parts.push(`deja ${tops.length} encima`);
+  if (bots.length) parts.push(`pone ${bots.length} debajo`);
+  if (by("gy").length) parts.push(`manda al cementerio ${by("gy").map(nm).join(", ")}`);
+  if (by("ex").length) parts.push(`exilia ${by("ex").map(nm).join(", ")}`);
+  if (by("hand").length) parts.push(`se pone ${by("hand").length} en la mano`);
+  addLog(!parts.length ? "deja las cartas como estaban" : parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} y${parts[parts.length - 1]}`);
+  changed();
+});
 $("#viewer").addEventListener("close", () => {
   const d = $("#viewer");
   if (d.dataset.shuffle && G) { shuffle(G.lib); addLog("baraja su biblioteca"); changed(); }
