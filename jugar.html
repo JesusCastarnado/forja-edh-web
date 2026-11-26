@@ -104,17 +104,21 @@
     <button class="btn sm" id="leaveGame">Salir</button>
   </div>
   <div class="tgrid" id="tgrid">
-    <div class="opps" id="opps"></div>
-    <div class="mine">
-      <div class="bf" id="bf" data-drop="bf"></div>
-      <div class="hrow">
+    <div class="seats" id="seats" data-n="1">
+      <div id="opps"></div>
+      <section class="seat me" id="mySeat">
+        <div class="seatbg" id="myBg"></div>
+        <div class="bf" id="bf" data-drop="bf"></div>
         <div class="life" id="lifeBox"></div>
-        <div class="phand" id="hand" data-drop="hand"></div>
-        <div class="ztiles">
-          <div class="zones" id="zones"></div>
-          <div class="zone cz" id="cmdz" data-drop="cz" data-zone="cz"></div>
+        <span class="sname" id="mySeatName"></span>
+        <div class="seatbottom">
+          <div class="phand" id="hand" data-drop="hand"></div>
+          <div class="ztiles">
+            <div class="zones" id="zones"></div>
+            <div class="zone cz" id="cmdz" data-drop="cz" data-zone="cz"></div>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
     <aside class="tlog" id="tlog">
       <div class="loglist" id="logList"></div>

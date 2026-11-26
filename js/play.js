@@ -277,7 +277,7 @@ function myPub() {
   const C = i => G.cards[i] || { n: "?" };
   return {
     id: ME.id, name: ME.name, deck: G.deck, life: G.life, poison: G.poison, cmdDmg: G.cmdDmg,
-    lib: G.lib.length, hand: G.hand.length, ready: G.mull.phase === "done", dead: G.dead || null,
+    lib: G.lib.length, hand: G.hand.length, ready: G.mull.phase === "done", dead: G.dead || null, art: myArt(),
     bf: G.bf.map(b => ({ i: b.i, n: b.f ? null : C(b.i).n, u: b.f ? null : C(b.i).u || null, x: +b.x.toFixed(3), y: +b.y.toFixed(3), t: b.t ? 1 : 0, f: b.f ? 1 : 0, c: b.c || 0 })),
     gy: G.gy.map(i => C(i).n), ex: G.ex.map(i => C(i).n),
     cz: G.cz.map(i => ({ n: C(i).n, tax: (G.tax[i] || 0) * 2 })),
@@ -326,7 +326,7 @@ function move(i, to, opts = {}) {
 function freeSpot(c) {
   const sc = SF.cached(c.n), land = sc && A.isLand(sc);
   const y = land ? 0.62 : (sc && /Creature/.test(sc.type) ? 0.02 : 0.32);
-  for (let x = 0.01; x < 0.92; x += 0.06) {
+  for (let x = 0.15; x < 0.92; x += 0.06) { // a la izquierda arriba están las vidas
     if (!G.bf.some(b => Math.abs(b.x - x) < 0.045 && Math.abs(b.y - y) < 0.12)) return { x, y };
   }
   return { x: 0.01 + Math.random() * 0.8, y: Math.min(0.62, y + 0.06) };
@@ -431,43 +431,63 @@ function render() {
   if (!R.started || $("#tableView").hidden) return;
   $("#tCode").textContent = room ? room.code : "";
   const act = activeId();
-  $("#turnInfo").innerHTML = `Turno ${R.turnNo} · <b>${esc(act === ME.id ? "Tu turno" : nameOf(act))}</b>`;
+  const spect = people.filter(p => !(R.order || []).includes(p.id));
+  $("#turnInfo").innerHTML = `Turno ${R.turnNo} · <b>${esc(act === ME.id ? "Tu turno" : nameOf(act))}</b>${spect.length ? ` <span class="muted small">· Mirando: ${spect.map(p => esc(p.name)).join(", ")}</span>` : ""}`;
   $("#passTurn").hidden = act !== ME.id || !G;
   ["#untapAll", "#diceBtn", "#tokenBtn"].forEach(s => $(s).hidden = !G);
-  renderOpps(); renderMine(); renderMull(); renderLog(); renderEnd();
+  const ids = (R.order || []).filter(id => id !== ME.id);
+  $("#seats").dataset.n = Math.min(4, ids.length + (G ? 1 : 0)) || 1;
+  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd();
   if (zoomEl && !zoomEl.isConnected) hideZoom();
 }
-function renderOpps() {
-  const ids = (R.order || []).filter(id => id !== ME.id);
-  const spect = people.filter(p => !R.order.includes(p.id));
-  $("#opps").dataset.n = ids.length;
-  $("#opps").innerHTML = ids.map(id => {
-    const p = pubs.get(id), on = people.some(x => x.id === id);
-    if (!p) return `<div class="opp"><div class="ohead"><b>${esc(nameOf(id))}</b><span class="muted small">${on ? "preparando su mesa…" : "desconectado"}</span></div><div class="obf"></div></div>`;
+// Arte del comandante para el fondo de cada panel (como un tapete).
+const artOf = name => { const c = name && SF.cached(name); return (c && c.art) || ""; };
+const bgStyle = url => url ? ` style="background-image:url('${esc(url)}')"` : "";
+// Posición de cada panel en la rejilla: los rivales arriba y tú abajo a la izquierda (como en una mesa de cuatro).
+const seatOrder = k => (k < 2 ? k : k + 2);
+const cardOnBoard = (b, extra = "") => `<div class="pc${extra}${b.t ? " tap" : ""}${b.f ? " down" : ""}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`;
+function renderOpps(ids) {
+  $("#opps").innerHTML = ids.map((id, k) => {
+    const p = pubs.get(id), on = people.some(x => x.id === id), order = `order:${seatOrder(k)}`;
+    if (!p) return `<section class="seat" style="${order}"><span class="sname">${esc(nameOf(id))}</span><p class="muted bfmsg">${on ? "Preparando su mesa…" : "Desconectado"}</p></section>`;
     const myDmg = (p.cmdDmg || {})[ME.id] || 0;
-    return `<div class="opp${activeId() === id ? " active" : ""}${on ? "" : " off"}${p.dead ? " dead" : ""}">
-      <div class="ohead">
-        <b>${esc(p.name)}</b>${p.dead ? ` <span class="tag bad">Eliminado: ${esc(p.dead)}</span>` : p.ready ? "" : ' <span class="tag">Mulligan…</span>'}${on ? "" : ' <span class="tag bad">Desconectado</span>'}
-        <span class="olife" title="Vidas">${p.life}</span>${p.poison ? `<span class="tag" title="Veneno">☠ ${p.poison}</span>` : ""}
-        ${myDmg ? `<span class="tag" title="Daño de tu comandante">⚔ ${myDmg}</span>` : ""}
-        <span class="grow"></span>
-        <span class="ocount" title="Cartas en la mano">✋ ${p.hand}</span><span class="ocount" title="Biblioteca">📚 ${p.lib}</span>
-      </div>
-      <div class="ohand" title="${p.hand} ${p.hand === 1 ? "carta" : "cartas"} en la mano">${'<div class="pc back"></div>'.repeat(Math.min(p.hand, 15))}<b>${p.hand}</b></div>
-      <div class="obody">
-        <div class="ocz">${p.cz.map(c => `<div class="pc"${zoomAttr(c.n)}>${cardImg(c.n)}${c.tax ? `<span class="badge">+${c.tax}</span>` : ""}</div>`).join("")}</div>
-        <div class="ozones">${[["gy", "CEM"], ["ex", "EXILIO"]].map(([z, label]) => { const last = p[z][p[z].length - 1];
-          return `<div class="ozone" data-ozone="${z}" data-oid="${esc(id)}" title="Ver ${z === "gy" ? "su cementerio" : "su exilio"}"><span class="zpill">${label} <b>${p[z].length}</b></span><div class="ztile">${last ? `<div class="pc"${zoomAttr(last)}>${cardImg(last)}</div>` : ""}</div></div>`; }).join("")}</div>
-        <div class="obf">${p.bf.map(b => `<div class="pc${b.t ? " tap" : ""}${b.f ? " down" : ""}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`).join("")}</div>
-      </div></div>`;
-  }).join("") + (spect.length ? `<p class="spect muted small">Mirando: ${spect.map(p => esc(p.name)).join(", ")}</p>` : "")
-    + (!ids.length ? '<p class="muted small bfmsg">Juegas solo: ideal para probar el mazo.</p>' : "");
+    const tags = (p.dead ? `<span class="tag bad">Eliminado</span>` : p.ready ? "" : '<span class="tag">Mulligan…</span>') + (on ? "" : '<span class="tag bad">Desconectado</span>');
+    const n = Math.min(p.hand, 12), mid = (n - 1) / 2;
+    const backs = [...Array(n)].map((_, j) => { const off = j - mid; return `<div class="hc ob" style="--r:${(off * 3).toFixed(1)}deg;--dy:${(off * off * 0.5).toFixed(1)}px;z-index:${j + 1}"><div class="pc back"></div></div>`; }).join("");
+    const tile = (z, label) => { const last = p[z][p[z].length - 1];
+      return `<div class="zone" data-ozone="${z}" data-oid="${esc(id)}" title="Ver ${z === "gy" ? "su cementerio" : "su exilio"}"><span class="zpill">${label} <b>${p[z].length}</b> <span class="zcar">▾</span></span><div class="ztile">${last ? `<div class="pc"${zoomAttr(last)}>${cardImg(last)}</div>` : ""}</div></div>`; };
+    return `<section class="seat${activeId() === id ? " active" : ""}${on ? "" : " off"}${p.dead ? " dead" : ""}" style="${order}">
+      <div class="seatbg"${bgStyle(p.art || artOf(p.cz[0] && p.cz[0].n))}></div>
+      <div class="obf">${p.bf.map(b => cardOnBoard(b)).join("")}</div>
+      <div class="life olife"><span class="lnum${p.life <= 0 ? " bad" : ""}" title="Vidas">${p.life}</span>
+        ${p.poison ? `<span class="ltag" title="Veneno">☠ ${p.poison}</span>` : ""}${myDmg ? `<span class="ltag" title="Daño que le ha hecho tu comandante">⚔ ${myDmg}</span>` : ""}</div>
+      <span class="sname">${esc(p.name)} ${tags}</span>
+      <div class="seatbottom">
+        <div class="phand ohandf" style="--n:${Math.max(n, 1)}" title="${p.hand} ${p.hand === 1 ? "carta" : "cartas"} en la mano">${backs}<span class="zpill hpill">✋ <b>${p.hand}</b></span></div>
+        <div class="ztiles">
+          <div class="zone" title="Biblioteca"><span class="zpill">BIB <b>${p.lib}</b></span><div class="ztile">${p.lib ? '<div class="pc back"></div>' : ""}</div></div>
+          ${tile("gy", "CEM")}${tile("ex", "EXILIO")}
+          <div class="zone" title="Zona de mando"><span class="zpill">CMD</span><div class="ztile czt">${p.cz.map(c => `<div class="pc"${zoomAttr(c.n)}>${cardImg(c.n)}${c.tax ? `<span class="badge">+${c.tax}</span>` : ""}</div>`).join("")}</div></div>
+        </div>
+      </div></section>`;
+  }).join("");
+}
+let lifeOpen = false;
+function myArt() {
+  if (!G) return "";
+  const i = Object.keys(G.cards).find(k => G.cards[k].cmd);
+  return i ? artOf(G.cards[i].n) : "";
 }
 function renderMine() {
-  if (!G) {
-    $("#bf").innerHTML = '<p class="muted bfmsg">Estás mirando la partida.</p>'; $("#hand").innerHTML = ""; $("#zones").innerHTML = ""; $("#lifeBox").innerHTML = ""; $("#cmdz").innerHTML = "";
-    return;
-  }
+  const seat = $("#mySeat");
+  seat.hidden = !G;
+  if (!G) { $("#bf").innerHTML = ""; $("#hand").innerHTML = ""; $("#zones").innerHTML = ""; $("#lifeBox").innerHTML = ""; $("#cmdz").innerHTML = ""; return; }
+  seat.classList.toggle("active", activeId() === ME.id);
+  seat.classList.toggle("dead", !!G.dead);
+  const ids = (R.order || []).filter(id => id !== ME.id);
+  seat.style.order = String(Math.min(2, ids.length));
+  const art = myArt(); $("#myBg").style.backgroundImage = art ? `url('${art}')` : "";
+  $("#mySeatName").innerHTML = `${esc(ME.name || "Tú")} <span class="tag">Tú</span>${G.dead ? ' <span class="tag bad">Eliminado</span>' : ""}`;
   $("#bf").innerHTML = G.bf.map(b => {
     const c = G.cards[b.i];
     return `<div class="pc own${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-i="${b.i}" data-z="bf" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(c.n, c.u)}>${b.f ? "" : cardImg(c.n, c.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}${c.tok ? '<span class="tokb">Ficha</span>' : ""}</div>`;
@@ -476,7 +496,7 @@ function renderMine() {
   const n = G.hand.length, mid = (n - 1) / 2, step = Math.min(4, 36 / Math.max(n, 1));
   $("#hand").innerHTML = G.hand.map((i, k) => {
     const c = G.cards[i], off = k - mid;
-    return `<div class="hc" style="--r:${(off * step).toFixed(2)}deg;--dy:${(off * off * step * 0.35).toFixed(1)}px;z-index:${k + 1}">${costBadge(c.n)}<div class="pc own" data-i="${i}" data-z="hand"${zoomAttr(c.n, c.u)}>${cardImg(c.n, c.u)}</div></div>`;
+    return `<div class="hc" style="--r:${(off * step).toFixed(2)}deg;--dy:${(off * off * step * 0.2).toFixed(1)}px;z-index:${k + 1}">${costBadge(c.n)}<div class="pc own" data-i="${i}" data-z="hand"${zoomAttr(c.n, c.u)}>${cardImg(c.n, c.u)}</div></div>`;
   }).join("") + `<span class="zpill hpill" title="Cartas en tu mano">MANO <b>${n}</b></span>`;
   $("#hand").style.setProperty("--n", Math.max(n, 1));
   const top = z => G[z].length ? G[z][G[z].length - 1] : null, gt = top("gy"), et = top("ex");
@@ -489,12 +509,15 @@ function renderMine() {
   const tax = G.cz.reduce((a, i) => a + (G.tax[i] || 0), 0);
   $("#cmdz").innerHTML = `${pill("cz", "CMD", null, "Zona de mando: lanzar tu comandante")}<div class="ztile czt">${G.cz.map(i => `<div class="pc own" data-i="${i}" data-z="cz"${zoomAttr(G.cards[i].n)} title="Doble clic para lanzarlo">${cardImg(G.cards[i].n)}${G.tax[i] ? `<span class="badge">+${G.tax[i] * 2}</span>` : ""}</div>`).join("")}</div>`;
   $("#cmdz").title = tax ? "Impuesto de comandante acumulado" : "";
-  const opps = (R.order || []).filter(id => id !== ME.id);
+  // Vidas arriba a la izquierda; la flecha despliega veneno y daño de comandante.
+  const extra = G.poison || Object.values(G.cmdDmg).some(Boolean);
   $("#lifeBox").innerHTML = `
-    ${G.dead ? `<div class="ldead">Eliminado: ${esc(G.dead)}</div>` : ""}
-    <div class="lrow"><button class="btn sm" data-life="-1">−</button><span class="lnum${G.life <= 0 ? " bad" : ""}">${G.life}</span><button class="btn sm" data-life="1">+</button></div>
-    <div class="lsub"><span>Veneno</span><button class="linkbtn" data-poison="-1">−</button><b class="${G.poison >= 10 ? "bad" : ""}">${G.poison}</b><button class="linkbtn" data-poison="1">+</button></div>
-    ${opps.map(id => { const n = G.cmdDmg[id] || 0; return `<div class="lsub" title="Daño que te ha hecho el comandante de ${esc(nameOf(id))}"><span>⚔ ${esc(nameOf(id))}</span><button class="linkbtn" data-cdmg="${esc(id)}" data-d="-1">−</button><b class="${n >= 21 ? "bad" : ""}">${n}</b><button class="linkbtn" data-cdmg="${esc(id)}" data-d="1">+</button></div>`; }).join("")}`;
+    <div class="lrow"><button class="lbtn" data-life="-1" aria-label="Quitar una vida">−</button><span class="lnum${G.life <= 0 ? " bad" : ""}">${G.life}</span><button class="lbtn" data-life="1" aria-label="Sumar una vida">+</button>
+      <button class="lbtn lmore${extra ? " on" : ""}" data-lmore title="Veneno y daño de comandante" aria-expanded="${lifeOpen}">${lifeOpen ? "▴" : "▾"}</button></div>
+    <div class="ldetail"${lifeOpen ? "" : " hidden"}>
+      <div class="lsub"><span>☠ Veneno</span><button class="linkbtn" data-poison="-1">−</button><b class="${G.poison >= 10 ? "bad" : ""}">${G.poison}</b><button class="linkbtn" data-poison="1">+</button></div>
+      ${ids.map(id => { const d = G.cmdDmg[id] || 0; return `<div class="lsub" title="Daño que te ha hecho el comandante de ${esc(nameOf(id))}"><span>⚔ ${esc(nameOf(id))}</span><button class="linkbtn" data-cdmg="${esc(id)}" data-d="-1">−</button><b class="${d >= 21 ? "bad" : ""}">${d}</b><button class="linkbtn" data-cdmg="${esc(id)}" data-d="1">+</button></div>`; }).join("")}
+    </div>`;
 }
 
 /* ===================== interacción con la mesa ===================== */
@@ -532,6 +555,7 @@ function bindTable() {
 
   $("#lifeBox").addEventListener("click", e => {
     if (!G) return;
+    if (e.target.closest("[data-lmore]")) { lifeOpen = !lifeOpen; renderMine(); return; }
     const l = e.target.closest("[data-life]"), p = e.target.closest("[data-poison]"), cd = e.target.closest("[data-cdmg]");
     if (l) { G.life += +l.dataset.life; lifeLog(); checkDeath(); changed(); }
     if (p) { G.poison = Math.max(0, G.poison + +p.dataset.poison); addLog(`tiene ${G.poison} contadores de veneno`); checkDeath(); changed(); }
@@ -825,7 +849,7 @@ function bindDrag() {
       else if (to === "bf") {
         const r = $("#bf").getBoundingClientRect();
         const bw = Math.min(s.w, s.h) / r.width, bh = Math.max(s.w, s.h) / r.height; // tamaño de una carta del campo (aprox.)
-        const x = Math.max(0, Math.min(1 - Math.min(bw, 0.06), (e.clientX - s.dx - r.left) / r.width)), y = Math.max(0, Math.min(1 - Math.min(bh, 0.3), (e.clientY - s.dy - r.top) / r.height));
+        const x = Math.max(0, Math.min(1 - Math.min(bw, 0.06), (e.clientX - s.dx - r.left) / r.width)), y = Math.max(0, Math.min(1 - Math.min(bh, 0.36), (e.clientY - s.dy - r.top) / r.height));
         const b = G.bf.find(q => q.i === s.i);
         if (b) { b.x = x; b.y = y; changed(); }
         else move(s.i, "bf", { x, y });
