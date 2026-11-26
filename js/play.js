@@ -163,6 +163,7 @@ function leaveRoom(silent) {
   if (lobbyNet) lobbyNet.untrack();
   net = null; room = null; people = []; R = { v: 0, started: false }; G = null; pubs.clear();
   reqs.clear(); myReq = null; reqNote = ""; clearTimeout(myReqTimer); $("#reqBox").hidden = true;
+  hist = []; cut = false;
   if (silent !== true) { history.replaceState(null, "", location.pathname); showView("lobby"); }
 }
 // El nombre y tamaño de la sala los decide quien la creó (va en su Presence).
@@ -268,6 +269,7 @@ const nameOf = id => id === ME.id ? ME.name : ((pubs.get(id) || people.find(p =>
 // `ping`: { o: dueño, i?: carta } que se señala (sale resaltado unos segundos en la mesa de todos).
 function addLog(text, chat = false, cards = null, ping = null) {
   const e = { at: Date.now(), from: ME.id, who: ME.name, text, chat };
+  if (!chat && !restoring && !text.startsWith("deshace")) lastAct = text; // para «Deshacer: …»
   if (cards && cards.length) e.cards = cards.slice(0, 20);
   if (ping) { e.ping = ping; addPing(e); }
   logs.push(e); if (logs.length > 300) logs.shift();
@@ -529,7 +531,7 @@ $("#cbApply").addEventListener("click", () => {
   const sum = Object.entries(per).map(([id, d]) => `${nameOf(id)} ${d.life ? `−${d.life}` : "0"}${d.poison ? ` (+${d.poison} veneno)` : ""}`).join(", ");
   addLog(`resuelve el combate: ${sum || "sin daño a jugadores"}${gain ? `; gana ${gain} vidas` : ""}${dead.length ? `; mueren ${dead.join(", ")}` : ""}`);
   G.atk = null; fight = null; $("#combatDlg").close();
-  checkDeath(); changed();
+  noUndo(); checkDeath(); changed();
 });
 // Resultado del combate que me toca (soy defensor): lo aplico en mi mesa.
 function onCombat(m) {
@@ -550,7 +552,7 @@ function onCombat(m) {
   }
   for (const i of d.dies || []) if (bfOf(i)) { bits.push(`muere ${cardInfo(ME.id, i).name}`); move(i, "gy", { quiet: true }); }
   if (bits.length) addLog(bits.join(", ") + (bits.some(b => b.includes("vidas")) ? ` (vidas ${G.life})` : ""));
-  checkDeath(); changed();
+  noUndo(); checkDeath(); changed();
 }
 $("#combatBox").addEventListener("click", e => {
   const b = e.target.closest("[data-cb]"); if (!b || !G) return;
@@ -636,7 +638,40 @@ async function startGame() {
 }
 
 // Cualquier cambio en mi mesa: guardar, mandar a los demás y pintar.
-function changed() { save(); sendPub(); render(); }
+function changed() { record(); save(); sendPub(); render(); }
+
+/* ===================== deshacer ===================== */
+// Historial de mi mesa: una copia después de cada acción (las que llegan juntas, en menos de 400 ms, cuentan
+// como una). Deshacer vuelve a la copia anterior. No se puede deshacer más allá de barajar, buscar o mirar la
+// biblioteca (sería hacer trampas con lo que has visto), del mulligan ni del daño que te hacen en combate.
+const UNDO_MAX = 30;
+let hist = [], cut = false, restoring = false, lastAct = "";
+const noUndo = () => { cut = true; };
+function record() {
+  if (restoring || !G) return;
+  if (G.mull.phase !== "done") { hist = []; return; }
+  const s = JSON.stringify(G), now = Date.now(), top = hist[hist.length - 1];
+  if (cut) { hist = [{ s, at: now, label: "" }]; cut = false; }
+  else if (top && top.s === s) return;
+  else if (top && now - top.at < 400 && hist.length > 1) { top.s = s; top.at = now; }
+  else { hist.push({ s, at: now, label: lastAct }); if (hist.length > UNDO_MAX + 1) hist.shift(); }
+  renderUndo();
+}
+function undo() {
+  if (!G || hist.length < 2) return;
+  const gone = hist.pop(), prev = hist[hist.length - 1];
+  restoring = true;
+  try { G = JSON.parse(prev.s); } finally { restoring = false; }
+  prev.at = 0; // la siguiente acción no se junta con esta
+  addLog(`deshace: ${gone.label || "su última acción"}`);
+  restoring = true; try { save(); sendPub(); render(); } finally { restoring = false; }
+  renderUndo();
+}
+function renderUndo() {
+  const b = $("#undoBtn"); if (!b) return;
+  b.hidden = !G; b.disabled = hist.length < 2;
+  b.title = hist.length < 2 ? "Nada que deshacer" : `Deshacer: ${hist[hist.length - 1].label || "la última acción"} (Ctrl+Z)`;
+}
 let pubTimer = null;
 function sendPub(now) {
   if (!net || !G) return;
@@ -817,6 +852,7 @@ function render() {
   $("#passTurn").hidden = act !== ME.id || !G;
   ["#untapAll", "#diceBtn", "#tokenBtn"].forEach(s => $(s).hidden = !G);
   $("#concede").hidden = !G || !!G.dead;
+  renderUndo();
   const ids = (R.order || []).filter(id => id !== ME.id);
   $("#seats").dataset.n = Math.min(4, ids.length + (G ? 1 : 0)) || 1;
   $("#attackBtn").hidden = !canAttack();
@@ -941,6 +977,7 @@ function bindTable() {
   document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
   $("#logToggle").addEventListener("click", () => $("#tgrid").classList.toggle("nolog"));
   $("#concede").addEventListener("click", concede);
+  $("#undoBtn").addEventListener("click", undo);
   $("#attackBtn").addEventListener("click", e => {
     if (!canAttack()) return;
     const ts = attackTargets();
@@ -960,7 +997,7 @@ function bindTable() {
     if (!G) return;
     if (e.target.closest("[data-lmore]")) { lifeOpen = !lifeOpen; renderMine(); return; }
     const l = e.target.closest("[data-life]"), p = e.target.closest("[data-poison]"), cd = e.target.closest("[data-cdmg]");
-    if (l) { G.life += +l.dataset.life; lifeLog(); checkDeath(); changed(); }
+    if (l) { G.life += +l.dataset.life; lastAct = `cambia sus vidas a ${G.life}`; lifeLog(); checkDeath(); changed(); }
     if (p) { G.poison = Math.max(0, G.poison + +p.dataset.poison); addLog(`tiene ${G.poison} contadores de veneno`); checkDeath(); changed(); }
     if (cd) {
       const id = cd.dataset.cdmg, d = +cd.dataset.d, now = Math.max(0, (G.cmdDmg[id] || 0) + d);
@@ -1037,7 +1074,7 @@ const keyName = e => (e.key === "Delete" || e.key === "Backspace" ? "Supr" : e.k
 // Atajos sin carta: con el ratón en cualquier sitio de la mesa.
 const TABLE_KEYS = {
   R: () => draw(1),
-  B: () => { shuffle(G.lib); addLog("baraja su biblioteca"); changed(); },
+  B: () => { noUndo(); shuffle(G.lib); addLog("baraja su biblioteca"); changed(); },
   E: () => $("#untapAll").click(),
   P: () => { if (activeId() === ME.id) $("#passTurn").click(); },
   " ": () => { if (activeId() === ME.id) $("#passTurn").click(); },
@@ -1047,7 +1084,10 @@ const TABLE_KEYS = {
   "?": () => $("#keysDlg").showModal(),
 };
 function onKey(e) {
-  if ($("#tableView").hidden || !G || e.ctrlKey || e.metaKey || e.altKey) return;
+  if ($("#tableView").hidden || !G) return;
+  // Ctrl+Z (o Cmd+Z): deshacer, salvo mientras escribes.
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "z" && !(e.target.closest && e.target.closest("input, textarea, [contenteditable]")) && !document.querySelector("dialog[open]")) { e.preventDefault(); undo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
   if (document.querySelector("dialog[open]") || !$("#mull").hidden || !$("#endBox").hidden) return;
   const k = keyName(e);
@@ -1253,10 +1293,10 @@ function libMenu(e) {
   menu(e, [
     ["Robar una", () => draw(1)],
     ["Robar X…", () => { const n = ask("¿Cuántas cartas robas?", "2"); if (n) draw(n); }],
-    ["Barajar", () => { shuffle(G.lib); addLog("baraja su biblioteca"); changed(); }],
+    ["Barajar", () => { noUndo(); shuffle(G.lib); addLog("baraja su biblioteca"); changed(); }],
     null,
-    ["Buscar en la biblioteca", () => { addLog("busca en su biblioteca"); openZone("lib"); }],
-    ["Mirar las X de arriba…", () => { const n = Math.min(ask("¿Cuántas miras?", "3"), G.lib.length); if (n) { addLog(`mira las ${n} cartas de arriba de su biblioteca`); openScry(n); } }],
+    ["Buscar en la biblioteca", () => { noUndo(); addLog("busca en su biblioteca"); openZone("lib"); }],
+    ["Mirar las X de arriba…", () => { const n = Math.min(ask("¿Cuántas miras?", "3"), G.lib.length); if (n) { noUndo(); addLog(`mira las ${n} cartas de arriba de su biblioteca`); openScry(n); } }],
     ["Moler X…", () => { const n = ask("¿Cuántas mueles?", "1"); for (let k = 0; k < n && G.lib.length; k++) move(G.lib[0], "gy"); }],
     ["Revelar la de arriba", () => { if (G.lib[0]) addLog(`revela la carta de arriba de su biblioteca: ${G.cards[G.lib[0]].n}`, false, [G.cards[G.lib[0]].n]); }],
     ["Exiliar la de arriba", () => { if (G.lib[0]) move(G.lib[0], "ex"); }],
@@ -1350,7 +1390,7 @@ $("#scryDone").addEventListener("click", () => {
 });
 $("#viewer").addEventListener("close", () => {
   const d = $("#viewer");
-  if (d.dataset.shuffle && G) { shuffle(G.lib); addLog("baraja su biblioteca"); changed(); }
+  if (d.dataset.shuffle && G) { noUndo(); shuffle(G.lib); addLog("baraja su biblioteca"); changed(); }
   d.dataset.shuffle = "";
 });
 $("#vGrid").addEventListener("click", e => {
@@ -1424,7 +1464,7 @@ function bindDrag() {
         const bw = Math.min(s.w, s.h) / r.width, bh = Math.max(s.w, s.h) / r.height; // tamaño de una carta del campo (aprox.)
         const x = Math.max(0, Math.min(1 - Math.min(bw, 0.06), (e.clientX - s.dx - r.left) / r.width)), y = Math.max(0, Math.min(1 - Math.min(bh, 0.36), (e.clientY - s.dy - r.top) / r.height));
         const b = G.bf.find(q => q.i === s.i);
-        if (b) { b.x = x; b.y = y; changed(); }
+        if (b) { b.x = x; b.y = y; lastAct = `recoloca ${nameOrHidden(b.i, b)}`; changed(); }
         else move(s.i, "bf", { x, y });
       } else if (to !== s.z) move(s.i, to);
     }

@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 41, fecha: "2026-11-26", titulo: "Jugar: deshacer", ir: "jugar.html",
+    texto: "¿Has movido o girado una carta sin querer? En la mesa, «↶ Deshacer» (o Ctrl+Z) vuelve atrás tu última acción, hasta 30 veces. Los demás lo ven en el registro. Para que nadie haga trampas, no se puede deshacer más allá de barajar, buscar o mirar tu biblioteca, ni el daño de un combate." },
   { id: 40, fecha: "2026-11-26", titulo: "Jugar: combate con ataques, bloqueos y daño", ir: "jugar.html",
     texto: "En tu turno, pon el ratón sobre una criatura y pulsa K (o «⚔ Atacar» para todas) y elige a quién atacas: un jugador o uno de sus planeswalkers. Los atacados bloquean igual, con K. Al pulsar «Resolver daño», la web calcula vidas, daño de comandante, veneno y lealtad, y qué criaturas mueren, con arrollar, vínculo vital, toque mortal, dañar primero, doble daño, infectar e indestructible. Lo revisas, corriges si hace falta y se aplica en la mesa de todos." },
   { id: 39, fecha: "2026-11-26", titulo: "Jugar: señala cartas y jugadores", ir: "jugar.html",
