@@ -39,6 +39,8 @@ const reqs = new Map();
 let myReq = null, myReqTimer = null, reqNote = "";
 
 /* ===================== arranque ===================== */
+// App instalada (abierta desde el icono): para los estilos que dejan hueco a la barra de la hora del iPhone.
+if (matchMedia("(display-mode: standalone)").matches || navigator.standalone === true) document.documentElement.classList.add("standalone");
 init();
 async function init() {
   cleanSaves();
