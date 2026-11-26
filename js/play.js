@@ -236,7 +236,8 @@ function onMsg(k, m) {
   if (k === "log") {
     if (!m.e || typeof m.e.text !== "string") return;
     logs.push(m.e); if (logs.length > 300) logs.shift(); renderLog();
-    if (cardsOf(m.e).length && m.e.from !== ME.id) showReveal(m.e); clearTimeout(onMsg.st); onMsg.st = setTimeout(save, 500); return; }
+    if (cardsOf(m.e).length && m.e.from !== ME.id) showReveal(m.e);
+    if (m.e.ping) addPing(m.e); clearTimeout(onMsg.st); onMsg.st = setTimeout(save, 500); return; }
 }
 let lastTurnSeen = "";
 function onRoomState() {
@@ -262,9 +263,11 @@ const nameOf = id => id === ME.id ? ME.name : ((pubs.get(id) || people.find(p =>
 
 /* ===================== registro y chat ===================== */
 // `cards`: nombres de cartas que se enseñan (salen en miniatura en el registro y en un aviso a los demás).
-function addLog(text, chat = false, cards = null) {
+// `ping`: { o: dueño, i?: carta } que se señala (sale resaltado unos segundos en la mesa de todos).
+function addLog(text, chat = false, cards = null, ping = null) {
   const e = { at: Date.now(), from: ME.id, who: ME.name, text, chat };
   if (cards && cards.length) e.cards = cards.slice(0, 20);
+  if (ping) { e.ping = ping; addPing(e); }
   logs.push(e); if (logs.length > 300) logs.shift();
   if (net) net.send("log", { e });
   save();
@@ -297,6 +300,37 @@ function renderReveal() {
   if (!revealing || $("#tableView").hidden) { box.hidden = true; return; }
   box.innerHTML = `<p><span class="grow"><b>${esc(revealing.who)}</b> ${esc(revealing.text)}</span><button class="btn sm" data-rclose>Cerrar</button></p>${shownCards(revealing, "rcards", "img")}`;
   box.hidden = false;
+}
+/* ===================== señalar ===================== */
+// Señalar una carta del campo (tuya o de otro) o a un jugador: se resalta 5 s en la mesa de todos.
+let pings = [], pingTimer = null;
+function ping(o, i) {
+  if (!net || !R.started) return;
+  let what;
+  if (i) {
+    const own = o === ME.id, b = own ? (G && bfOf(i)) : ((pubs.get(o) || { bf: [] }).bf.find(x => x.i === i));
+    if (!b) return;
+    const n = own ? (b.f ? "una carta boca abajo" : faceName(G.cards[i].n, b.tf)) : (b.f ? "una carta boca abajo" : b.n);
+    what = own ? `su ${n}` : `${n} de ${nameOf(o)}`;
+  } else what = o === ME.id ? "su propia mesa" : `a ${nameOf(o)}`;
+  addLog(`señala ${what}`, false, null, i ? { o, i } : { o });
+}
+function addPing(e) {
+  const p = e.ping; if (!p || typeof p.o !== "string") return;
+  pings = pings.filter(x => !(x.o === p.o && x.i === p.i));
+  pings.push({ o: p.o, i: typeof p.i === "string" ? p.i : null, until: Date.now() + 5000 });
+  applyPings();
+  clearTimeout(pingTimer); pingTimer = setTimeout(applyPings, 5100);
+}
+function applyPings() {
+  const now = Date.now(); pings = pings.filter(p => p.until > now);
+  document.querySelectorAll(".ping").forEach(el => el.classList.remove("ping"));
+  for (const p of pings) {
+    const o = CSS.escape(p.o), sel = !p.i ? `[data-seat="${o}"]`
+      : p.o === ME.id ? `#bf .pc[data-i="${CSS.escape(p.i)}"]` : `#opps .pc[data-oid="${o}"][data-oi="${CSS.escape(p.i)}"]`;
+    document.querySelectorAll(sel).forEach(el => el.classList.add("ping"));
+  }
+  if (pings.length) { clearTimeout(pingTimer); pingTimer = setTimeout(applyPings, Math.max(100, Math.min(...pings.map(p => p.until)) - now + 50)); }
 }
 $("#revealBox").addEventListener("click", e => { if (e.target.closest("[data-rclose]")) { revealing = null; renderReveal(); } });
 
@@ -522,7 +556,7 @@ function render() {
   $("#concede").hidden = !G || !!G.dead;
   const ids = (R.order || []).filter(id => id !== ME.id);
   $("#seats").dataset.n = Math.min(4, ids.length + (G ? 1 : 0)) || 1;
-  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd(); renderJoin(); renderReveal();
+  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd(); renderJoin(); renderReveal(); applyPings();
   if (zoomEl && !zoomEl.isConnected) hideZoom();
 }
 // Arte del comandante para el fondo de cada panel (como un tapete).
@@ -530,21 +564,21 @@ const artOf = name => { const c = name && SF.cached(name); return (c && c.art) |
 const bgStyle = url => url ? ` style="background-image:url('${esc(url)}')"` : "";
 // Posición de cada panel en la rejilla: los rivales arriba y tú abajo a la izquierda (como en una mesa de cuatro).
 const seatOrder = k => (k < 2 ? k : k + 2);
-const cardOnBoard = (b, extra = "") => `<div class="pc${extra}${b.t ? " tap" : ""}${b.f ? " down" : ""}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`;
+const cardOnBoard = (b, owner) => `<div class="pc${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-oid="${esc(owner)}" data-oi="${esc(b.i)}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`;
 function renderOpps(ids) {
   $("#opps").innerHTML = ids.map((id, k) => {
     const p = pubs.get(id), on = people.some(x => x.id === id), order = `order:${seatOrder(k)}`;
     const acts = on ? "" : offActs(id);
-    if (!p) return `<section class="seat${on ? "" : " off"}${isDead(id) ? " dead" : ""}" style="${order}"><span class="sname">${esc(nameOf(id))}</span>${acts || `<p class="muted bfmsg">${on ? "Preparando su mesa…" : "Desconectado"}</p>`}</section>`;
+    if (!p) return `<section class="seat${on ? "" : " off"}${isDead(id) ? " dead" : ""}" data-seat="${esc(id)}" style="${order}"><span class="sname">${esc(nameOf(id))}</span>${acts || `<p class="muted bfmsg">${on ? "Preparando su mesa…" : "Desconectado"}</p>`}</section>`;
     const myDmg = (p.cmdDmg || {})[ME.id] || 0;
     const tags = (isDead(id) ? `<span class="tag bad">Eliminado</span>` : p.ready ? "" : '<span class="tag">Mulligan…</span>') + (on ? "" : '<span class="tag bad">Desconectado</span>');
     const n = Math.min(p.hand, 12), mid = (n - 1) / 2;
     const backs = [...Array(n)].map((_, j) => { const off = j - mid; return `<div class="hc ob" style="--r:${(off * 3).toFixed(1)}deg;--dy:${(off * off * 0.5).toFixed(1)}px;z-index:${j + 1}"><div class="pc back"></div></div>`; }).join("");
     const tile = (z, label) => { const last = p[z][p[z].length - 1];
       return `<div class="zone" data-ozone="${z}" data-oid="${esc(id)}" title="Ver ${z === "gy" ? "su cementerio" : "su exilio"}"><span class="zpill">${label} <b>${p[z].length}</b> <span class="zcar">▾</span></span><div class="ztile">${last ? `<div class="pc"${zoomAttr(last)}>${cardImg(last)}</div>` : ""}</div></div>`; };
-    return `<section class="seat${activeId() === id ? " active" : ""}${on ? "" : " off"}${isDead(id) ? " dead" : ""}" style="${order}">
+    return `<section class="seat${activeId() === id ? " active" : ""}${on ? "" : " off"}${isDead(id) ? " dead" : ""}" data-seat="${esc(id)}" style="${order}">
       <div class="seatbg"${bgStyle(p.art || artOf(p.cz[0] && p.cz[0].n))}></div>${acts}
-      <div class="obf">${p.bf.map(b => cardOnBoard(b)).join("")}</div>
+      <div class="obf">${p.bf.map(b => cardOnBoard(b, id)).join("")}</div>
       <div class="life olife"><span class="lnum${p.life <= 0 ? " bad" : ""}" title="Vidas">${p.life}</span>
         ${p.poison ? `<span class="ltag" title="Veneno">☠ ${p.poison}</span>` : ""}${myDmg ? `<span class="ltag" title="Daño que le ha hecho tu comandante">⚔ ${myDmg}</span>` : ""}</div>
       <span class="sname">${esc(p.name)} ${tags}</span>
@@ -577,6 +611,7 @@ function renderMine() {
   seat.hidden = !G;
   if (!G) { $("#bf").innerHTML = ""; $("#hand").innerHTML = ""; $("#zones").innerHTML = ""; $("#lifeBox").innerHTML = ""; $("#cmdz").innerHTML = ""; return; }
   seat.classList.toggle("active", activeId() === ME.id);
+  seat.dataset.seat = ME.id;
   seat.classList.toggle("dead", !!G.dead);
   const ids = (R.order || []).filter(id => id !== ME.id);
   seat.style.order = String(Math.min(2, ids.length));
@@ -702,7 +737,12 @@ function bindTable() {
 
   // Menú contextual (clic derecho o pulsación larga).
   document.addEventListener("contextmenu", e => {
-    if ($("#tableView").hidden || !G) return;
+    if ($("#tableView").hidden) return;
+    // Cartas y paneles de los demás: señalar (también para quien solo mira).
+    const oc = e.target.closest("#opps .pc[data-oi]"), os = e.target.closest("#opps [data-seat]");
+    if (oc) { e.preventDefault(); menu(e, [["Señalar esta carta", () => ping(oc.dataset.oid, oc.dataset.oi), "S"], [`Señalar a ${nameOf(oc.dataset.oid)}`, () => ping(oc.dataset.oid)]]); return; }
+    if (os && !e.target.closest("[data-ozone], button")) { e.preventDefault(); menu(e, [[`Señalar a ${nameOf(os.dataset.seat)}`, () => ping(os.dataset.seat)]]); return; }
+    if (!G) return;
     const el = e.target.closest(".pc[data-i]"), z = e.target.closest("[data-zone]");
     if (el && el.dataset.i && el.dataset.z !== "lib") { e.preventDefault(); cardMenu(e, el.dataset.i); return; }
     if (z && z.dataset.zone === "lib") { e.preventDefault(); libMenu(e); return; }
@@ -713,13 +753,16 @@ function bindTable() {
   addEventListener("keydown", onKey);
   $("#keysBtn").addEventListener("click", () => $("#keysDlg").showModal());
   // La carta que tienes debajo del ratón (para los atajos de teclado).
-  document.addEventListener("pointerover", e => { const el = e.target.closest(".pc.own[data-i]"); if (el) hoverI = el.dataset.i; });
-  document.addEventListener("pointerout", e => { const el = e.target.closest(".pc.own[data-i]"); if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hoverI = null; });
+  document.addEventListener("pointerover", e => { const el = e.target.closest(".pc.own[data-i]"); if (el) hoverI = el.dataset.i; const oc = e.target.closest("#opps .pc[data-oi]"); if (oc) hoverO = { o: oc.dataset.oid, i: oc.dataset.oi }; });
+  document.addEventListener("pointerout", e => {
+    const el = e.target.closest(".pc.own[data-i]"); if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hoverI = null;
+    const oc = e.target.closest("#opps .pc[data-oi]"); if (oc && (!e.relatedTarget || !oc.contains(e.relatedTarget))) hoverO = null;
+  });
 
   bindDrag(); bindZoom();
 }
 /* ===================== atajos de teclado ===================== */
-let hoverI = null;
+let hoverI = null, hoverO = null; // carta mía / de otro jugador bajo el ratón
 const keyName = e => (e.key === "Delete" || e.key === "Backspace" ? "Supr" : e.key === "=" || e.key === "+" ? "+" : e.key === "-" || e.key === "_" ? "-" : e.key.length === 1 ? e.key.toUpperCase() : e.key);
 // Atajos sin carta: con el ratón en cualquier sitio de la mesa.
 const TABLE_KEYS = {
@@ -745,10 +788,11 @@ function onKey(e) {
     if (act) {
       e.preventDefault(); hideMenu();
       const i = hoverI;
-      if (!["G", "+", "-", "V", "C", "T"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
+      if (!["G", "+", "-", "V", "C", "T", "S"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
       act.run(i); return;
     }
   }
+  if (k === "S" && hoverO) { e.preventDefault(); hideMenu(); ping(hoverO.o, hoverO.i); return; }
   const t = TABLE_KEYS[k];
   if (t) { e.preventDefault(); hideMenu(); t(); }
 }
@@ -911,6 +955,7 @@ const CARD_ACTS = [
   { key: "V", label: b => (b.f ? "Poner boca arriba" : "Poner boca abajo"), when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.f = !b.f; addLog(b.f ? `pone ${G.cards[i].n} boca abajo` : `pone boca arriba ${G.cards[i].n}`); changed(); } },
   { key: "T", label: b => (b.tf ? "Volver a la cara de delante" : "Transformar"), when: (z, c, b) => !!b && !b.f && !!backOf(c.n),
     run: i => { const b = bfOf(i), n = G.cards[i].n; b.tf = !b.tf; addLog(b.tf ? `transforma ${faceName(n)} en ${faceName(n, true)}` : `vuelve ${faceName(n, true)} a su cara de delante (${faceName(n)})`); changed(); } },
+  { key: "S", label: "Señalar", when: (z, c, b) => !!b, run: i => ping(ME.id, i) },
   { key: "C", label: "Copiar (crea una ficha igual)", when: (z, c, b) => !(b && b.f), run: i => { const c = G.cards[i], b = bfOf(i); createToken(faceName(c.n, b && b.tf), faceU(c, b) || img(c.n, "img"), true); } },
   null,
   { key: "M", label: "A la mano", when: z => z !== "hand", run: i => move(i, "hand") },

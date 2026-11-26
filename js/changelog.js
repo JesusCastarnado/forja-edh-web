@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 39, fecha: "2026-11-26", titulo: "Jugar: señala cartas y jugadores", ir: "jugar.html",
+    texto: "¿«Ataco a este» o «destruyo esa»? En la mesa, clic derecho en cualquier carta del campo (tuya o de otro) → «Señalar», o pon el ratón encima y pulsa S. También puedes señalar a un jugador con clic derecho en su panel. Brilla unos segundos en la pantalla de todos y queda en el registro." },
   { id: 38, fecha: "2026-11-26", titulo: "Jugar: enseña cartas de verdad", ir: "jugar.html",
     texto: "Al enseñar una carta de tu mano (o toda la mano) o revelar la de arriba de tu biblioteca, a los demás les sale la imagen de la carta en grande, y queda en miniatura en el registro para verla al pasar el ratón." },
   { id: 37, fecha: "2026-11-26", titulo: "Jugar: mira las de arriba y ordénalas", ir: "jugar.html",
