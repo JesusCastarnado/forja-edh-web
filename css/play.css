@@ -38,6 +38,12 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 #tableView{display:flex;flex-direction:column;height:100vh;height:100dvh;
   background:radial-gradient(ellipse at 50% 120%,#1d3328 0%,#0f1714 70%);color:var(--fg)}
 .tbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px max(10px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);background:rgba(15,23,20,.85)}
+/* En el iPhone (sobre todo con la app instalada) la página se dibuja por detrás de la barra de la hora:
+   la barra de la mesa deja ese hueco para que sus botones (Pasar turno…) se vean y se puedan pulsar. */
+.tbar{padding-top:max(6px, env(safe-area-inset-top, 0px))}
+@media (display-mode: standalone){ .tbar{padding-top:calc(env(safe-area-inset-top, 0px) + 10px)} }
+html.standalone .tbar{padding-top:calc(env(safe-area-inset-top, 0px) + 10px)}
+#tableView .seats{padding-bottom:env(safe-area-inset-bottom, 0px)}
 .tbrand{font-family:var(--f-display);font-size:18px}
 .tbrand b{color:var(--accent);font-weight:400}
 .tturn{font-size:14px;margin:0 6px}
@@ -267,4 +273,8 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
   .tbar{gap:4px}
   .tbar .pcode,.tbrand{display:none}
   .tbar .btn.sm{padding:4px 8px;font-size:12px}
+  /* «Pasar turno» lo primero y más grande, para encontrarlo con el pulgar */
+  .tbar #passTurn{order:-1;padding:6px 14px;font-size:14px}
 }
+/* En pantallas táctiles no hay teclado: los atajos sobran */
+@media (hover:none) and (pointer:coarse){ #keysBtn{display:none} }
