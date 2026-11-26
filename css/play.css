@@ -185,6 +185,16 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 .pc.back,.pc.down{background:repeating-linear-gradient(45deg,#3a2a17 0 6px,#2c1f10 6px 12px);border:2px solid #6b5126}
 .pc.back::after,.pc.down::after{content:"";position:absolute;inset:22%;border-radius:50%;border:2px solid #b8913f;opacity:.7}
 .pc.empty{background:transparent;border:1px dashed var(--line);box-shadow:none}
+/* Fuerza/resistencia abajo a la derecha (en las tuyas se pueden pulsar) y contadores de habilidad a la izquierda */
+.ptb{position:absolute;right:3%;bottom:3%;display:flex;gap:2px;z-index:2}
+.ptv{min-width:1.5em;text-align:center;font-size:clamp(10px,1.2vw,14px);line-height:1.35;font-weight:800;color:#fff;background:rgba(10,12,11,.88);border:1px solid rgba(255,255,255,.35);border-radius:4px;padding:0 2px}
+.ptv[data-pt]{cursor:pointer}
+.ptv[data-pt]:hover{border-color:var(--accent);background:#2a2416}
+.ptv.hi{color:#7ee08a;border-color:#4f9c5a}
+.ptv.lo{color:#ff8a7a;border-color:#b45346}
+.kwx{position:absolute;left:3%;top:22%;display:flex;flex-direction:column;gap:2px;z-index:2}
+.kwx i{font-style:normal;font-size:9px;font-weight:800;line-height:1.3;color:#1b1406;background:#e9c46a;border-radius:3px;padding:0 3px;box-shadow:0 1px 2px rgba(0,0,0,.6)}
+.bf .pc .badge,.obf .pc .badge{bottom:auto;top:3%;right:3%}
 .pc .badge{position:absolute;right:4%;bottom:4%;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:12px;border-radius:999px;padding:0 6px;line-height:1.5}
 .pc .tokb{position:absolute;left:4%;top:4%;background:rgba(0,0,0,.7);color:#fff;font-size:9px;border-radius:4px;padding:0 4px}
 .pname-ph{display:grid;place-items:center;height:100%;padding:6px;text-align:center;font-size:11px;color:#ddd;background:#2a2a2a}
