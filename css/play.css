@@ -42,7 +42,7 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 .tbrand b{color:var(--accent);font-weight:400}
 .tturn{font-size:14px;margin:0 6px}
 .grow{flex:1}
-.tgrid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 250px;grid-template-rows:minmax(0,37%) minmax(0,1fr);
+.tgrid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 250px;grid-template-rows:minmax(0,42%) minmax(0,1fr);
   grid-template-areas:"opps log" "mine log";gap:6px;padding:6px}
 .tgrid.nolog{grid-template-columns:minmax(0,1fr) 0}
 .tgrid.nolog .tlog{display:none}
@@ -92,7 +92,7 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 .ocz{display:flex;flex-direction:column;gap:4px;width:min(13%,84px);flex:none}
 .ocz .pc{width:100%}
 .obf{position:relative;flex:1;container-type:size;min-height:0}
-.obf .pc{position:absolute;width:min(8.6cqw,25.5cqh)}
+.obf .pc{position:absolute;width:min(9.5cqw,33cqh,100px)}
 .spect{position:absolute;right:6px;bottom:-2px;margin:0}
 .opps .bfmsg{position:static;grid-column:1/-1}
 .tag.bad{color:var(--bad)}
@@ -206,3 +206,12 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
   .ztile{height:calc(var(--zw) * .9)}
   .phand{order:3;flex:1 1 100%;height:calc(var(--hh) * .82);padding-top:8px}
 }
+
+/* cementerio y exilio de cada rival, a la vista */
+.ozones{display:flex;flex-direction:column;gap:6px;flex:none;order:3;width:min(11%,72px)}
+.ozone{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+.ozone .ztile{width:100%;height:auto;aspect-ratio:63/88}
+.ozone .zpill{font-size:10px;padding:3px 7px;cursor:pointer}
+.ozone:hover .zpill{border-color:var(--accent);color:var(--fg)}
+.obf{order:2}
+.ocz{order:1}

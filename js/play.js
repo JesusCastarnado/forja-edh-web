@@ -339,9 +339,7 @@ function draw(n = 1) {
 }
 function myTurnStarts() {
   G.bf.forEach(b => { b.t = false; });
-  const skipDraw = R.order.length === 2 && R.turnNo === 1;
-  if (!skipDraw && G.lib.length) G.hand.push(G.lib.shift());
-  addLog(skipDraw ? "empieza su turno (endereza; el primer jugador no roba en partidas de dos)" : "empieza su turno: endereza y roba");
+  addLog("empieza su turno y endereza sus permanentes");
   changed();
 }
 
@@ -454,12 +452,12 @@ function renderOpps() {
         ${myDmg ? `<span class="tag" title="Daño de tu comandante">⚔ ${myDmg}</span>` : ""}
         <span class="grow"></span>
         <span class="ocount" title="Cartas en la mano">✋ ${p.hand}</span><span class="ocount" title="Biblioteca">📚 ${p.lib}</span>
-        <button class="linkbtn" data-ozone="gy" data-oid="${esc(id)}">Cementerio ${p.gy.length}</button>
-        <button class="linkbtn" data-ozone="ex" data-oid="${esc(id)}">Exilio ${p.ex.length}</button>
       </div>
       <div class="ohand" title="${p.hand} ${p.hand === 1 ? "carta" : "cartas"} en la mano">${'<div class="pc back"></div>'.repeat(Math.min(p.hand, 15))}<b>${p.hand}</b></div>
       <div class="obody">
         <div class="ocz">${p.cz.map(c => `<div class="pc"${zoomAttr(c.n)}>${cardImg(c.n)}${c.tax ? `<span class="badge">+${c.tax}</span>` : ""}</div>`).join("")}</div>
+        <div class="ozones">${[["gy", "CEM"], ["ex", "EXILIO"]].map(([z, label]) => { const last = p[z][p[z].length - 1];
+          return `<div class="ozone" data-ozone="${z}" data-oid="${esc(id)}" title="Ver ${z === "gy" ? "su cementerio" : "su exilio"}"><span class="zpill">${label} <b>${p[z].length}</b></span><div class="ztile">${last ? `<div class="pc"${zoomAttr(last)}>${cardImg(last)}</div>` : ""}</div></div>`; }).join("")}</div>
         <div class="obf">${p.bf.map(b => `<div class="pc${b.t ? " tap" : ""}${b.f ? " down" : ""}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`).join("")}</div>
       </div></div>`;
   }).join("") + (spect.length ? `<p class="spect muted small">Mirando: ${spect.map(p => esc(p.name)).join(", ")}</p>` : "")
@@ -604,6 +602,7 @@ const TABLE_KEYS = {
   B: () => { shuffle(G.lib); addLog("baraja su biblioteca"); changed(); },
   E: () => $("#untapAll").click(),
   P: () => { if (activeId() === ME.id) $("#passTurn").click(); },
+  " ": () => { if (activeId() === ME.id) $("#passTurn").click(); },
   F: () => $("#tokenBtn").click(),
   D: () => addLog(`tira un d6: ${1 + Math.floor(Math.random() * 6)}`),
   L: () => $("#logToggle").click(),
@@ -614,6 +613,8 @@ function onKey(e) {
   if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
   if (document.querySelector("dialog[open]") || !$("#mull").hidden || !$("#endBox").hidden) return;
   const k = keyName(e);
+  if (e.repeat && k === " ") { e.preventDefault(); return; } // mantener pulsado no pasa varios turnos
+  if (k === " " && e.target.closest && e.target.closest("button")) e.target.blur();
   if (hoverI && G.cards[hoverI] && where(hoverI)) {
     const act = cardActs(hoverI).find(a => a && a.key === k);
     if (act) {
