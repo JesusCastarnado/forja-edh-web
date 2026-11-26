@@ -72,6 +72,18 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 .req .row{display:flex;gap:6px;justify-content:flex-end}
 #joinDlg .grow{flex:1}
 .vfilter{width:100%;margin:0 0 10px}
+/* Cartas enseñadas: miniaturas en el registro y aviso a los demás */
+.lcards{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.lcards .lc{width:44px;cursor:zoom-in}
+.lcards .lc img{width:100%;display:block;border-radius:3px}
+.lcards .lc .pname-ph{display:block;font-size:9px;line-height:1.2;padding:2px;border:1px solid var(--line);border-radius:3px;min-height:60px}
+.reveal{position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:26;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:grid;gap:8px;width:max-content;max-width:min(760px,94vw);max-height:75vh;overflow:auto}
+.reveal p{margin:0;display:flex;gap:8px;align-items:center}
+.reveal p .grow{flex:1}
+.reveal .rcards{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.reveal .rcards .lc{width:min(150px,28vw)}
+.reveal .rcards:has(.lc:nth-child(4)) .lc{width:min(100px,21vw)}
+.reveal .rcards img{width:100%;display:block;border-radius:6px}
 /* Mirar las X de arriba: ordenar y elegir a dónde va cada carta */
 .scard{display:grid;gap:4px;font-size:11px;color:var(--muted);text-align:center}
 .scard .pos{font-weight:600;color:var(--fg)}

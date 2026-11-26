@@ -2,6 +2,8 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 38, fecha: "2026-11-26", titulo: "Jugar: enseña cartas de verdad", ir: "jugar.html",
+    texto: "Al enseñar una carta de tu mano (o toda la mano) o revelar la de arriba de tu biblioteca, a los demás les sale la imagen de la carta en grande, y queda en miniatura en el registro para verla al pasar el ratón." },
   { id: 37, fecha: "2026-11-26", titulo: "Jugar: mira las de arriba y ordénalas", ir: "jugar.html",
     texto: "En la mesa, «Mirar las X de arriba» de tu biblioteca ahora te deja ordenarlas y elegir a dónde va cada una (encima, debajo, cementerio, exilio o mano) de una vez, como al adivinar o vigilar. Nada cambia hasta que pulsas «Hecho»." },
   { id: 36, fecha: "2026-11-26", titulo: "Jugar: transforma cartas y busca en tu biblioteca", ir: "jugar.html",

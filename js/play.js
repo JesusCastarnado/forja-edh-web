@@ -233,7 +233,10 @@ function onMsg(k, m) {
   }
   if (k === "room") { if (m.R && m.R.v > R.v) { R = m.R; onRoomState(); } return; }
   if (k === "pub") { if (m.p && m.p.id && m.p.id !== ME.id) { pubs.set(m.p.id, m.p); resolveNames(m.p); scheduleRender(); } return; }
-  if (k === "log") { logs.push(m.e); if (logs.length > 300) logs.shift(); renderLog(); clearTimeout(onMsg.st); onMsg.st = setTimeout(save, 500); return; }
+  if (k === "log") {
+    if (!m.e || typeof m.e.text !== "string") return;
+    logs.push(m.e); if (logs.length > 300) logs.shift(); renderLog();
+    if (cardsOf(m.e).length && m.e.from !== ME.id) showReveal(m.e); clearTimeout(onMsg.st); onMsg.st = setTimeout(save, 500); return; }
 }
 let lastTurnSeen = "";
 function onRoomState() {
@@ -258,8 +261,10 @@ const activeId = () => R.order ? R.order[R.turn % R.order.length] : null;
 const nameOf = id => id === ME.id ? ME.name : ((pubs.get(id) || people.find(p => p.id === id) || {}).name || "Alguien");
 
 /* ===================== registro y chat ===================== */
-function addLog(text, chat = false) {
+// `cards`: nombres de cartas que se enseñan (salen en miniatura en el registro y en un aviso a los demás).
+function addLog(text, chat = false, cards = null) {
   const e = { at: Date.now(), from: ME.id, who: ME.name, text, chat };
+  if (cards && cards.length) e.cards = cards.slice(0, 20);
   logs.push(e); if (logs.length > 300) logs.shift();
   if (net) net.send("log", { e });
   save();
@@ -276,9 +281,24 @@ function mergeLogs(list) {
 }
 function renderLog() {
   const box = $("#logList"); if (!box) return;
-  box.innerHTML = logs.slice(-150).map(e => `<p class="${e.chat ? "lchat" : ""}"><b>${esc(e.who)}</b>${e.chat ? ": " : " "}${esc(e.text)}</p>`).join("");
+  box.innerHTML = logs.slice(-150).map(e => `<p class="${e.chat ? "lchat" : ""}"><b>${esc(e.who)}</b>${e.chat ? ": " : " "}${esc(e.text)}${shownCards(e, "lcards")}</p>`).join("");
   box.scrollTop = box.scrollHeight;
 }
+const cardsOf = e => (Array.isArray(e && e.cards) ? e.cards.filter(n => typeof n === "string").slice(0, 20) : []);
+const shownCards = (e, cls, size) => { const c = cardsOf(e); return c.length ? `<span class="${cls}">${c.map(n => `<span class="lc"${zoomAttr(n)}>${cardImg(n, null, size)}</span>`).join("")}</span>` : ""; };
+// Aviso con las cartas que acaba de enseñar otro jugador (se cierra solo).
+let revealing = null, revealTimer = null;
+function showReveal(e) {
+  revealing = e; renderReveal();
+  clearTimeout(revealTimer); revealTimer = setTimeout(() => { revealing = null; renderReveal(); }, 15000);
+}
+function renderReveal() {
+  const box = $("#revealBox");
+  if (!revealing || $("#tableView").hidden) { box.hidden = true; return; }
+  box.innerHTML = `<p><span class="grow"><b>${esc(revealing.who)}</b> ${esc(revealing.text)}</span><button class="btn sm" data-rclose>Cerrar</button></p>${shownCards(revealing, "rcards", "img")}`;
+  box.hidden = false;
+}
+$("#revealBox").addEventListener("click", e => { if (e.target.closest("[data-rclose]")) { revealing = null; renderReveal(); } });
 
 /* ===================== mi partida ===================== */
 // Cada jugador guarda su mesa aparte (dos pestañas del mismo navegador son dos jugadores).
@@ -502,7 +522,7 @@ function render() {
   $("#concede").hidden = !G || !!G.dead;
   const ids = (R.order || []).filter(id => id !== ME.id);
   $("#seats").dataset.n = Math.min(4, ids.length + (G ? 1 : 0)) || 1;
-  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd(); renderJoin();
+  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd(); renderJoin(); renderReveal();
   if (zoomEl && !zoomEl.isConnected) hideZoom();
 }
 // Arte del comandante para el fondo de cada panel (como un tapete).
@@ -900,7 +920,8 @@ const CARD_ACTS = [
   { key: "Z", label: "Debajo de la biblioteca", when: () => true, run: i => move(i, "lib", { bottom: true }) },
   { key: "", label: "A la zona de mando", when: (z, c) => c.cmd && z !== "cz", run: i => move(i, "cz") },
   { key: "", label: "Quitar un impuesto", when: (z, c) => c.cmd && z === "cz" && G.tax[c.i], run: i => { G.tax[i]--; changed(); } },
-  { key: "", label: "Enseñar a los demás", when: z => z === "hand", run: i => addLog(`enseña ${G.cards[i].n} de su mano`) },
+  { key: "", label: "Enseñar a los demás", when: z => z === "hand", run: i => addLog(`enseña ${G.cards[i].n} de su mano`, false, [G.cards[i].n]) },
+  { key: "", label: "Enseñar toda la mano", when: z => z === "hand", run: () => addLog(`enseña su mano (${G.hand.length} ${G.hand.length === 1 ? "carta" : "cartas"})`, false, G.hand.map(i => G.cards[i].n)) },
 ];
 function cardActs(i) {
   const z = where(i), c = { ...G.cards[i], i }, b = bfOf(i);
@@ -921,7 +942,7 @@ function libMenu(e) {
     ["Buscar en la biblioteca", () => { addLog("busca en su biblioteca"); openZone("lib"); }],
     ["Mirar las X de arriba…", () => { const n = Math.min(ask("¿Cuántas miras?", "3"), G.lib.length); if (n) { addLog(`mira las ${n} cartas de arriba de su biblioteca`); openScry(n); } }],
     ["Moler X…", () => { const n = ask("¿Cuántas mueles?", "1"); for (let k = 0; k < n && G.lib.length; k++) move(G.lib[0], "gy"); }],
-    ["Revelar la de arriba", () => { if (G.lib[0]) addLog(`revela la carta de arriba de su biblioteca: ${G.cards[G.lib[0]].n}`); }],
+    ["Revelar la de arriba", () => { if (G.lib[0]) addLog(`revela la carta de arriba de su biblioteca: ${G.cards[G.lib[0]].n}`, false, [G.cards[G.lib[0]].n]); }],
     ["Exiliar la de arriba", () => { if (G.lib[0]) move(G.lib[0], "ex"); }],
   ]);
 }
