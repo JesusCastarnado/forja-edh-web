@@ -62,6 +62,8 @@ Además:
 - **Importar por enlace**: pega en el cuadro de la lista el enlace de un mazo público de **Archidekt** y pulsa «Analizar mazo»: se trae solo, con su comandante (sin sideboard ni maybeboard). **Moxfield** no deja leer sus mazos desde otras webs, así que al pegar un enlace suyo te explica cómo copiarlo: en Moxfield, «Export» → «Copy for MTGA», y pegar la lista.
 - **Copiar lista** en el formato que quieras: *para Moxfield / Arena* (secciones Commander y Deck), *para Archidekt* (`1x Carta` con la etiqueta `[Commander]`) o *texto simple* (`*CMDR*` en el comandante).
 - **Sugerencias rápidas** (sin IA): rellena lo que le falta al esqueleto con las cartas más jugadas en tus colores.
+- **Ajustar a 100** (sin IA): si el mazo tiene más de 100 cartas (por ejemplo, porque has añadido unas ideas), propone qué quitar y por qué hasta dejarlo en 100. Primero lo obligatorio (fuera de colores, no legal, copias repetidas); después, de una en una y recalculando el esqueleto tras cada corte, lo que menos se juega con tu comandante según EDHREC, lo que sobra del esqueleto (más de 38 tierras, ramp o robo de sobra) y lo más caro de coste, sin bajar de los mínimos ni tocar las piezas de los combos que ya tienes. Cada carta lleva su motivo; puedes desmarcar las que quieras conservar y marcar otras de «Otras que podrías quitar». Nada se quita hasta que pulsas «Quitar las marcadas». También se abre con el enlace «ajustar» que sale junto a «Sobran N».
+- **Fichas del mazo**: todas las fichas y emblemas que crean las cartas del mazo (según Scryfall), con qué cartas las crean. En Jugar, el botón «Ficha» enseña primero las de tu mazo.
 - **A presupuesto**: escribes un precio máximo («déjamelo en 100 €») y propone cambios carta por carta, de la más cara a la más barata, hasta bajar de esa cifra. Sin IA cambia cada carta por una de las más jugadas que cumple la misma función (ramp por ramp, robo por robo, una criatura del tema por otra del tema…) y cuesta mucho menos; con IA, Claude elige los cambios pensando en la sinergia, y la web comprueba que cada cambio sea legal, esté en tus colores y salga más barato. Nada se aplica hasta que pulsas «Cambiar» o «Aplicar todos».
 - **Novedades para tu mazo**: cartas nuevas (no reimpresiones) de los últimos 5 meses en tus colores, previews incluidas. Primero salen las que encajan con tu comandante, con la razón: «Sinergia +X %» (EDHREC) o su tema, por ejemplo «Tema «vampire»» (la tribu del comandante manda sobre temas genéricos como las fichas). Después, el resto de novedades.
 - **Editar paso a paso**: abre el mazo en el constructor guiado.
@@ -375,6 +377,7 @@ js/ai.js              cliente de /api/claude (respuesta en streaming)
 js/currency.js        moneda de los precios ($ o €)
 js/combos.js          combos del mazo (cliente de /api/combos)
 js/edhrec.js          datos de EDHREC de cada comandante: sinergia y % de mazos (cliente de /api/edhrec)
+js/trim.js            «Ajustar a 100»: qué cartas quitar y por qué (sin IA)
 js/compare.js         pestaña «Comparar»
 js/goldfish.js        pestaña «Probar mano»: partida en solitario y simulación
 js/collection.js      colección y lista de deseos (datos)

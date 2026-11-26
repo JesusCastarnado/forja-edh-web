@@ -74,6 +74,9 @@ export function toCard(o) {
   const face = f => ({ pow: f.power ?? null, tou: f.toughness ?? null, loy: f.loyalty ?? null, type: f.type_line || "" });
   c.pt = faces ? faces.map(face) : [face(o)];
   c.kw = (o.keywords || []).map(k => String(k).toLowerCase());
+  // Fichas (y emblemas) que crea la carta, según Scryfall: [{ id, name }]. Sirven para «Fichas del mazo».
+  c.oid = o.oracle_id || (faces && f0.oracle_id) || "";
+  c.tokens = (o.all_parts || []).filter(p => p.component === "token" && p.id !== o.id).map(p => ({ id: p.id, name: p.name }));
   return c;
 }
 
@@ -104,6 +107,34 @@ export async function collection(names, { fuzzyLimit = 15 } = {}) {
   const found = new Map(), notFound = [];
   for (const n of want) { const c = cached(n); if (c) found.set(norm(n), c); else notFound.push(n); }
   return { found, notFound };
+}
+
+// Cartas concretas por su id de Scryfall (75 por petición). No se guardan en la caché por nombre: hay fichas
+// distintas con el mismo nombre (p. ej. «Soldier» 1/1 blanca y 1/2 roja).
+const byIdCache = new Map();
+export async function byIds(ids) {
+  const want = [...new Set(ids)].filter(Boolean), missing = want.filter(id => !byIdCache.has(id));
+  for (let i = 0; i < missing.length; i += 75) {
+    const r = await sf("/cards/collection", { body: { identifiers: missing.slice(i, i + 75).map(id => ({ id })) } });
+    (r && r.data || []).forEach(o => byIdCache.set(o.id, toCard(o)));
+  }
+  return want.map(id => byIdCache.get(id)).filter(Boolean);
+}
+
+// Fichas que crean estas cartas, sin repetir (dos cartas que crean un Treasure → un solo Treasure).
+// → [{ t: la ficha, by: [nombres de las cartas que la crean] }], ordenadas por cuántas cartas la crean.
+export async function tokensOf(cards) {
+  const ids = new Map(); // id de la ficha → cartas que la crean
+  for (const c of cards) for (const t of (c && c.tokens) || []) { if (!ids.has(t.id)) ids.set(t.id, new Set()); ids.get(t.id).add(c.name); }
+  await byIds([...ids.keys()]);
+  const byKind = new Map(); // misma ficha en otra edición → se juntan (por oracle_id)
+  for (const [id, set] of ids) {
+    const t = byIdCache.get(id); if (!t) continue;
+    const k = t.oid || norm(t.name) + "|" + t.text;
+    if (!byKind.has(k)) byKind.set(k, { t, by: new Set() });
+    set.forEach(n => byKind.get(k).by.add(n));
+  }
+  return [...byKind.values()].map(x => ({ t: x.t, by: [...x.by].sort() })).sort((a, b) => b.by.length - a.by.length || a.t.name.localeCompare(b.t.name));
 }
 
 export async function search(q, { order = "edhrec", dir = "", pages = 1, signal } = {}) {

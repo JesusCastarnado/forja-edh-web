@@ -2,6 +2,10 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 44, fecha: "2026-11-26", titulo: "Las fichas de tu mazo", ir: "#analizar",
+    texto: "En Analizar hay un apartado nuevo, «Fichas del mazo», con todas las fichas y emblemas que crean tus cartas y qué cartas las crean, para tenerlas preparadas o imprimirlas. Y en Jugar, al pulsar «Ficha», salen primero las de tu mazo." },
+  { id: 43, fecha: "2026-11-26", titulo: "Ajustar a 100", ir: "#analizar",
+    texto: "¿Has metido unas cuantas ideas y el mazo se ha pasado de 100? En Analizar, «Ajustar a 100» te dice qué cartas quitar y por qué: las que menos se juegan con tu comandante, lo que te sobra del esqueleto (tierras, ramp…) o lo más caro, sin tocar las piezas de tus combos. Desmarcas las que quieras conservar y quitas el resto de un clic." },
   { id: 42, fecha: "2026-11-26", titulo: "Jugar: fuerza y resistencia en la carta, y contadores de habilidad", ir: "jugar.html",
     texto: "Cada criatura del campo enseña su fuerza y resistencia abajo a la derecha (en verde si está subida, en rojo si está bajada). En las tuyas, clic en el cuadro de la fuerza o de la resistencia suma 1 y clic derecho resta 1, sin tocar los contadores +1/+1. Y con la tecla H (o clic derecho → «Fuerza/resistencia y contadores de habilidad…») puedes ponerle contadores de arrollar, toque mortal, vínculo vital, vuela… Todo cuenta para el combate y lo ven los demás." },
   { id: 41, fecha: "2026-11-26", titulo: "Jugar: deshacer", ir: "jugar.html",

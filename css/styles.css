@@ -143,6 +143,20 @@ ul.issues{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px}
 .sug .th{grid-row:span 2;width:44px;aspect-ratio:488/680;border-radius:4px;object-fit:cover;background:var(--raise)}
 .sug .why{grid-column:2/-1;color:var(--muted);font-size:13px}
 .sug.done{opacity:.45}
+/* Fichas del mazo */
+.tokgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
+.tokc{display:grid;gap:2px;background:none;border:0;padding:0;cursor:pointer;text-align:center;color:var(--fg);min-width:0}
+.tokc img{width:100%;aspect-ratio:488/680;object-fit:cover;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.tokc .noimg{display:grid;place-items:center;aspect-ratio:488/680;border:1px dashed var(--line);border-radius:6px;font-size:11px;padding:4px}
+.tokc .tokn{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tokc .tokby{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* «Ajustar a 100»: casillas en vez de botones */
+.trimlist .sug{cursor:pointer}
+.trimlist .sug input{width:18px;height:18px;margin:4px 0 0;accent-color:var(--accent)}
+.trimlist .sug.off{opacity:.55}
+.trimlist .qn{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.trimsum{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.trimsum .grow{flex:1}
 .status{font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .status:empty{display:none}
 .spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
