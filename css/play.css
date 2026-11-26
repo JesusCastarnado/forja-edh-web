@@ -72,6 +72,24 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 .req .row{display:flex;gap:6px;justify-content:flex-end}
 #joinDlg .grow{flex:1}
 .vfilter{width:100%;margin:0 0 10px}
+/* Combate */
+.cbox{position:fixed;left:12px;top:52px;z-index:24;width:min(380px,92vw);max-height:60vh;overflow:auto;background:var(--surface);border:1px solid #c0503c;border-radius:12px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:grid;gap:6px;font-size:13px}
+.cbox p{margin:0}
+.cbox ul{margin:0;padding-left:18px;display:grid;gap:3px}
+.cbox .row{display:flex;gap:6px;justify-content:flex-end}
+.cbox .cbblk{color:#7fb2e5}
+.pc.atk{box-shadow:0 0 0 3px #d9583f,0 0 12px 2px #d9583f}
+.pc.blk{box-shadow:0 0 0 3px #4f8fd6,0 0 12px 2px #4f8fd6}
+.pc.atk::after,.pc.blk::after{position:absolute;left:3%;top:3%;font-size:12px;line-height:1;padding:2px 3px;border-radius:4px;background:rgba(0,0,0,.75)}
+.pc.atk::after{content:"⚔"}
+.pc.blk::after{content:"🛡"}
+.cbrow{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px;display:grid;gap:4px}
+.cbblkrow{padding-left:14px}
+.ptin{width:46px;padding:1px 4px;font-size:13px}
+#combatDlg h4{margin:12px 0 6px}
+#combatDlg ul{margin:0 0 8px;padding-left:18px}
+.cbdies{display:flex;flex-wrap:wrap;gap:6px 14px}
+.cbdie{display:flex;gap:4px;align-items:center;font-size:13px}
 /* Cartas enseñadas: miniaturas en el registro y aviso a los demás */
 .lcards{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .lcards .lc{width:44px;cursor:zoom-in}
@@ -171,6 +189,10 @@ body.play.intable{padding:0;overflow:hidden;height:100vh;height:100dvh}
 .pc .tokb{position:absolute;left:4%;top:4%;background:rgba(0,0,0,.7);color:#fff;font-size:9px;border-radius:4px;padding:0 4px}
 .pname-ph{display:grid;place-items:center;height:100%;padding:6px;text-align:center;font-size:11px;color:#ddd;background:#2a2a2a}
 .pc.tap{transform:rotate(90deg)}
+/* Señalado: brilla unos segundos en la mesa de todos */
+@keyframes pingpulse{0%,100%{box-shadow:0 0 0 3px var(--accent),0 0 14px 4px var(--accent)}50%{box-shadow:0 0 0 2px var(--accent),0 0 4px 1px var(--accent)}}
+.pc.ping{animation:pingpulse .7s ease-in-out infinite;z-index:4}
+.seat.ping{animation:pingpulse .7s ease-in-out infinite}
 .pc.ghost{position:fixed;z-index:50;pointer-events:none;opacity:.92;box-shadow:0 10px 30px rgba(0,0,0,.6);transform-origin:center}
 
 /* mulligan */

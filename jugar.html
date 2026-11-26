@@ -95,6 +95,7 @@
     <span class="tturn" id="turnInfo"></span>
     <button class="btn sm primary" id="passTurn" title="Pasar turno (Espacio)">Pasar turno</button>
     <button class="btn sm primary" id="askJoin" title="Pide al anfitrión entrar en la partida con un mazo" hidden>Pedir entrar</button>
+    <button class="btn sm" id="attackBtn" title="Atacar con todas tus criaturas enderezadas (o ratón sobre una criatura y tecla K)" hidden>⚔ Atacar</button>
     <button class="btn sm" id="untapAll" title="Enderezar todos tus permanentes">Enderezar</button>
     <button class="btn sm" id="diceBtn">Dados</button>
     <button class="btn sm" id="tokenBtn">Ficha</button>
@@ -131,6 +132,7 @@
   <div class="mull endbox" id="endBox" hidden></div>
   <div class="reqs" id="reqBox" hidden></div>
   <div class="reveal" id="revealBox" hidden></div>
+  <div class="cbox" id="combatBox" hidden></div>
 </div>
 
 <div class="pzoom" id="pzoom" hidden><img alt=""></div>
@@ -139,6 +141,10 @@
   <input id="vFilter" class="vfilter" type="search" placeholder="Filtrar por nombre o tipo (Forest, criatura, instant…)" autocomplete="off">
   <div class="pvgrid" id="vGrid"></div><p class="muted small" id="vNone" hidden>Ninguna carta coincide.</p>
   <div class="row vfoot" id="vFoot" hidden><span class="muted small grow" id="vSum"></span><button class="btn primary" id="scryDone">Hecho</button></div></dialog>
+<dialog id="combatDlg" class="pdlg"><div class="vhead"><h3>Resolver el combate</h3><button class="btn sm" data-close>Cerrar</button></div>
+  <p class="muted small">Revisa la fuerza y la resistencia (por si hay equipos, auras o efectos que la web no ve) y qué criaturas mueren. Cada jugador recibe el resultado en su mesa.</p>
+  <div id="cbBody"></div>
+  <div class="row vfoot"><span class="grow"></span><button class="btn primary" id="cbApply">Aplicar daño</button></div></dialog>
 <dialog id="joinDlg" class="pdlg"><div class="vhead"><h3>Pedir entrar en la partida</h3><button class="btn sm" data-close>Cerrar</button></div>
   <p class="muted small">Elige con qué mazo juegas. El anfitrión recibe tu solicitud y, si te acepta, te sientas en la mesa: robas tu mano inicial y juegas después del último jugador.</p>
   <div id="deckPick3" class="pdecks"></div>
@@ -159,6 +165,8 @@
     <dt>A / Z</dt><dd>Encima / debajo de la biblioteca</dd>
     <dt>V</dt><dd>Boca abajo / boca arriba</dd>
     <dt>T</dt><dd>Transformar (cartas de dos caras)</dd>
+    <dt>S</dt><dd>Señalarla (también las de los demás)</dd>
+    <dt>K</dt><dd>Combate: atacar con ella (en tu turno) o bloquear</dd>
     <dt>+ / −</dt><dd>Poner / quitar un contador</dd>
   </dl>
   <p class="muted small">Y en cualquier sitio de la mesa:</p>

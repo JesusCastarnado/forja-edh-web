@@ -6,6 +6,7 @@ import * as A from "./analysis.js";
 import * as Decks from "./decks.js";
 import * as Cloud from "./cloud.js";
 import * as Net from "./playnet.js";
+import { resolve as resolveCombat, num } from "./combat.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -218,6 +219,7 @@ function onMsg(k, m) {
     return;
   }
   if (k === "logs") { if (m.to === ME.id && Array.isArray(m.logs)) mergeLogs(m.logs); return; }
+  if (k === "combat") { if (m.by === activeId()) onCombat(m); return; }
   if (k === "joinreq") {
     if (amHost() && R.started && m.from && !(R.order || []).includes(m.from)) {
       reqs.set(m.from, { name: String(m.name || "Alguien").slice(0, 24), deck: String(m.deck || "").slice(0, 80) });
@@ -236,7 +238,8 @@ function onMsg(k, m) {
   if (k === "log") {
     if (!m.e || typeof m.e.text !== "string") return;
     logs.push(m.e); if (logs.length > 300) logs.shift(); renderLog();
-    if (cardsOf(m.e).length && m.e.from !== ME.id) showReveal(m.e); clearTimeout(onMsg.st); onMsg.st = setTimeout(save, 500); return; }
+    if (cardsOf(m.e).length && m.e.from !== ME.id) showReveal(m.e);
+    if (m.e.ping) addPing(m.e); clearTimeout(onMsg.st); onMsg.st = setTimeout(save, 500); return; }
 }
 let lastTurnSeen = "";
 function onRoomState() {
@@ -262,9 +265,11 @@ const nameOf = id => id === ME.id ? ME.name : ((pubs.get(id) || people.find(p =>
 
 /* ===================== registro y chat ===================== */
 // `cards`: nombres de cartas que se enseñan (salen en miniatura en el registro y en un aviso a los demás).
-function addLog(text, chat = false, cards = null) {
+// `ping`: { o: dueño, i?: carta } que se señala (sale resaltado unos segundos en la mesa de todos).
+function addLog(text, chat = false, cards = null, ping = null) {
   const e = { at: Date.now(), from: ME.id, who: ME.name, text, chat };
   if (cards && cards.length) e.cards = cards.slice(0, 20);
+  if (ping) { e.ping = ping; addPing(e); }
   logs.push(e); if (logs.length > 300) logs.shift();
   if (net) net.send("log", { e });
   save();
@@ -297,6 +302,293 @@ function renderReveal() {
   if (!revealing || $("#tableView").hidden) { box.hidden = true; return; }
   box.innerHTML = `<p><span class="grow"><b>${esc(revealing.who)}</b> ${esc(revealing.text)}</span><button class="btn sm" data-rclose>Cerrar</button></p>${shownCards(revealing, "rcards", "img")}`;
   box.hidden = false;
+}
+/* ===================== combate ===================== */
+// Ayuda para el combate. Quien tiene el turno declara atacantes (tecla K o clic derecho) y a quién atacan
+// (un jugador o uno de sus planeswalkers); los atacados declaran bloqueadores (también con K) y el atacante
+// resuelve el daño (arrollar, vínculo vital, toque mortal, dañar primero, doble daño, infectar, comandante…).
+// Cada uno publica su parte (pub.atk / pub.blk) y aplica el resultado en su propia mesa.
+// Los contadores de una criatura cuentan como +1/+1; los de un planeswalker, como lealtad.
+const cid = () => (R.gid || "") + ":" + R.turnNo;
+const myAtk = () => (G && G.atk && G.atk.cid === cid() ? G.atk.list : []);
+const myBlk = () => (G && G.blk && G.blk.cid === cid() ? G.blk : null);
+const canAttack = () => !!(G && !G.dead && R.started && activeId() === ME.id && G.mull.phase === "done");
+const fakeEv = (x, y) => ({ clientX: x, clientY: y, preventDefault() {}, stopPropagation() {} });
+// El ataque en curso es siempre el de quien tiene el turno.
+function curAttack() {
+  const by = activeId();
+  if (by === ME.id) return { by, list: myAtk() };
+  const p = pubs.get(by), a = p && p.atk;
+  return { by, list: a && a.cid === cid() && Array.isArray(a.list) ? a.list : [] };
+}
+function blocksOf(id) {
+  if (id === ME.id) return myBlk() || { list: [], done: false };
+  const p = pubs.get(id), b = p && p.blk;
+  return b && b.cid === cid() && Array.isArray(b.list) ? { list: b.list, done: !!b.done } : { list: [], done: false };
+}
+// Fuerza, resistencia, lealtad y habilidades de una carta del campo (mía o de otro).
+function statsOf(n, tf, f, cnt, cmd) {
+  if (f || !n) return { name: "una carta boca abajo", type: "Creature", isCr: true, isPw: false, pow: 2, tou: 2, loy: 0, kw: [], cmd: false };
+  const c = SF.cached(n), face = c && c.pt ? (c.pt[tf ? 1 : 0] || c.pt[0]) : null;
+  const type = (face && face.type) || (c && c.type) || "";
+  const isPw = /Planeswalker/.test(type), isCr = /Creature/.test(type) || !!(face && face.pow != null);
+  const plus = isCr ? (cnt || 0) : 0;
+  return { name: faceName(n, tf), type, isCr, isPw, pow: face ? num(face.pow) + plus : 0, tou: face ? num(face.tou) + plus : 0, loy: isPw ? (cnt || 0) : 0, kw: (c && c.kw) || [], cmd: !!cmd };
+}
+function cardInfo(owner, i) {
+  if (owner === ME.id) { const b = G && bfOf(i); if (!b) return null; const c = G.cards[i]; return statsOf(c.n, b.tf, b.f, b.c, c.cmd); }
+  const p = pubs.get(owner), b = p && p.bf.find(x => x.i === i);
+  return b ? statsOf(b.n, b.tf, b.f, b.c, b.cmd) : null;
+}
+const cardEl = (owner, i) => owner === ME.id ? document.querySelector(`#bf .pc[data-i="${CSS.escape(i)}"]`) : document.querySelector(`#opps .pc[data-oid="${CSS.escape(owner)}"][data-oi="${CSS.escape(i)}"]`);
+// A quién se puede atacar: cada rival vivo y sus planeswalkers (y batallas).
+function attackTargets() {
+  const out = [];
+  for (const id of R.order || []) {
+    if (id === ME.id || isDead(id)) continue;
+    out.push({ p: id, pw: null, label: nameOf(id) });
+    ((pubs.get(id) || {}).bf || []).forEach(b => { const s = statsOf(b.n, b.tf, b.f, b.c); if (s.isPw || /Battle/.test(s.type)) out.push({ p: id, pw: b.i, label: `${s.name} (de ${nameOf(id)})` }); });
+  }
+  return out;
+}
+const targetLabel = a => a.pw ? `${(cardInfo(a.to, a.pw) || { name: "un planeswalker" }).name} (de ${nameOf(a.to)})` : nameOf(a.to);
+const attackersAgainst = id => { const A = curAttack(); return A.by === id ? [] : A.list.filter(a => a.to === id); };
+// Texto de la tecla K para una carta mía (vacío si ahora no hace nada).
+function combatLabel(i) {
+  if (!G || G.dead) return "";
+  const b = bfOf(i); if (!b) return "";
+  if (canAttack()) {
+    if (myAtk().some(a => a.i === i)) return "Quitar del ataque";
+    const s = cardInfo(ME.id, i);
+    return s && s.isCr && attackTargets().length ? "Atacar…" : "";
+  }
+  if (attackersAgainst(ME.id).length) {
+    const blk = myBlk();
+    if (blk && blk.list.some(x => x.i === i)) return "Dejar de bloquear";
+    const s = cardInfo(ME.id, i);
+    return s && s.isCr ? "Bloquear…" : "";
+  }
+  return "";
+}
+function combatKey(i) {
+  const el = cardEl(ME.id, i), r = el ? el.getBoundingClientRect() : { right: innerWidth / 2, top: innerHeight / 2 };
+  const ev = fakeEv(r.right, r.top);
+  const lbl = combatLabel(i);
+  if (lbl === "Quitar del ataque") return unattack(i);
+  if (lbl === "Dejar de bloquear") return unblock(i);
+  if (lbl === "Atacar…") {
+    const ts = attackTargets();
+    if (ts.length === 1) return attack(i, ts[0]);
+    return menu(ev, ts.map(t => [`Atacar a ${t.label}`, () => attack(i, t)]));
+  }
+  if (lbl === "Bloquear…") {
+    if (bfOf(i).t) return menu(ev, [["Las criaturas giradas no pueden bloquear", () => {}]]);
+    const me = cardInfo(ME.id, i), by = curAttack().by;
+    menu(ev, attackersAgainst(ME.id).map(a => {
+      const s = cardInfo(by, a.i) || { name: "?", kw: [] }, warn = blockWarn(s, me);
+      return [`Bloquear a ${s.name} (${s.pow}/${s.tou})${a.pw ? ` que ataca a ${targetLabel(a)}` : ""}${warn ? ` · ⚠ ${warn}` : ""}`, () => block(i, a.i)];
+    }));
+  }
+}
+function blockWarn(att, blk) {
+  if (att.kw.includes("flying") && !blk.kw.includes("flying") && !blk.kw.includes("reach")) return "vuela";
+  if (att.kw.includes("menace")) return "amenaza (hacen falta 2)";
+  return "";
+}
+function attack(i, t, quiet) {
+  const b = bfOf(i); if (!b) return;
+  if (!G.atk || G.atk.cid !== cid()) G.atk = { cid: cid(), list: [] };
+  G.atk.list = G.atk.list.filter(a => a.i !== i);
+  const s = cardInfo(ME.id, i), tapped = !s.kw.includes("vigilance") && !b.t;
+  if (tapped) b.t = true; // atacar gira la criatura (salvo vigilancia)
+  G.atk.list.push({ i, to: t.p, pw: t.pw || null, tapped });
+  if (!quiet) addLog(`ataca a ${t.label} con ${s.name} (${s.pow}/${s.tou})`);
+  changed();
+}
+function attackAll(t) {
+  const list = G.bf.filter(b => !b.t && !myAtk().some(a => a.i === b.i) && (cardInfo(ME.id, b.i) || {}).isCr);
+  if (!list.length) return;
+  list.forEach(b => attack(b.i, t, true));
+  addLog(`ataca a ${t.label} con ${list.map(b => cardInfo(ME.id, b.i).name).join(", ")}`);
+}
+function unattack(i) {
+  const a = myAtk().find(x => x.i === i); if (!a) return;
+  G.atk.list = G.atk.list.filter(x => x.i !== i);
+  const b = bfOf(i); if (b && a.tapped) b.t = false;
+  addLog(`retira del ataque a ${(cardInfo(ME.id, i) || { name: "una criatura" }).name}`); changed();
+}
+function cancelAttack() {
+  myAtk().forEach(a => { const b = bfOf(a.i); if (b && a.tapped) b.t = false; });
+  G.atk = null; addLog("cancela el ataque"); changed();
+}
+function block(i, a) {
+  if (!G.blk || G.blk.cid !== cid()) G.blk = { cid: cid(), list: [], done: false };
+  G.blk.list = G.blk.list.filter(x => x.i !== i);
+  G.blk.list.push({ i, a }); G.blk.done = false;
+  const att = cardInfo(curAttack().by, a) || { name: "un atacante" };
+  addLog(`bloquea a ${att.name} con ${cardInfo(ME.id, i).name}`); changed();
+}
+function unblock(i) {
+  const blk = myBlk(); if (!blk) return;
+  blk.list = blk.list.filter(x => x.i !== i); blk.done = false;
+  addLog(`deja de bloquear con ${(cardInfo(ME.id, i) || { name: "una criatura" }).name}`); changed();
+}
+function blocksDone() {
+  if (!G.blk || G.blk.cid !== cid()) G.blk = { cid: cid(), list: [], done: false };
+  G.blk.done = !G.blk.done;
+  if (G.blk.done) addLog(G.blk.list.length ? "ya ha declarado sus bloqueos" : "no bloquea");
+  changed();
+}
+// Aviso de combate (para todos) y marcas en las cartas que atacan y bloquean.
+function renderCombat() {
+  const box = $("#combatBox"), A = curAttack();
+  document.querySelectorAll(".pc.atk, .pc.blk").forEach(el => el.classList.remove("atk", "blk"));
+  if (!R.started || !A.list.length) { box.hidden = true; return; }
+  const mine = A.by === ME.id, defs = [...new Set(A.list.map(a => a.to))];
+  const rows = A.list.map(a => {
+    const s = cardInfo(A.by, a.i) || { name: "?", pow: 0, tou: 0 };
+    const bl = blocksOf(a.to).list.filter(b => b.a === a.i).map(b => (cardInfo(a.to, b.i) || { name: "?" }).name);
+    const el = cardEl(A.by, a.i); if (el) el.classList.add("atk");
+    blocksOf(a.to).list.filter(b => b.a === a.i).forEach(b => { const e2 = cardEl(a.to, b.i); if (e2) e2.classList.add("blk"); });
+    return `<li><b>${esc(s.name)}</b> <span class="muted">${s.pow}/${s.tou}</span> → ${esc(targetLabel(a))}${bl.length ? ` <span class="cbblk">bloqueado por ${esc(bl.join(", "))}</span>` : ""}</li>`;
+  }).join("");
+  const waiting = defs.filter(d => !isDead(d) && !blocksOf(d).done).map(nameOf);
+  const amDef = defs.includes(ME.id) && G && !G.dead, blk = myBlk();
+  box.innerHTML = `<p><b>⚔ ${mine ? "Atacas" : `${esc(nameOf(A.by))} ataca`}</b></p><ul>${rows}</ul>
+    <p class="small muted">${waiting.length ? `Esperando bloqueos de: ${esc(waiting.join(", "))}` : "Bloqueos declarados."}</p>
+    ${amDef ? `<p class="small">Para bloquear: ratón sobre una criatura tuya y <kbd>K</kbd> (o clic derecho → Bloquear).</p>
+      <div class="row"><button class="btn sm${blk && blk.done ? "" : " primary"}" data-cb="done">${blk && blk.done ? "Cambiar bloqueos" : blk && blk.list.length ? "Bloqueos listos" : "No bloqueo"}</button></div>` : ""}
+    ${mine ? `<div class="row"><button class="btn sm" data-cb="cancel">Cancelar ataque</button><button class="btn sm primary" data-cb="resolve">Resolver daño</button></div>` : ""}`;
+  box.hidden = false;
+}
+
+// Resolver: el atacante revisa (y puede corregir) fuerza y resistencia antes de aplicar.
+let fight = null, spared = new Set();
+function openResolve() {
+  const A = curAttack(); if (A.by !== ME.id || !A.list.length) return;
+  spared = new Set();
+  fight = A.list.map(a => {
+    const s = cardInfo(ME.id, a.i); if (!s) return null;
+    return {
+      key: ME.id + "|" + a.i, owner: ME.id, name: s.name, pow: s.pow, tou: s.tou, kw: s.kw, cmd: s.cmd,
+      target: { p: a.to, pw: a.pw ? a.to + "|" + a.pw : null }, tlabel: targetLabel(a),
+      blockers: blocksOf(a.to).list.filter(b => b.a === a.i).map(b => {
+        const t = cardInfo(a.to, b.i) || statsOf(null);
+        return { key: a.to + "|" + b.i, owner: a.to, name: t.name, pow: t.pow, tou: t.tou, kw: t.kw };
+      }),
+    };
+  }).filter(Boolean);
+  renderResolve(); $("#combatDlg").showModal();
+}
+const KW_ES = { trample: "arrollar", lifelink: "vínculo vital", deathtouch: "toque mortal", "first strike": "dañar primero", "double strike": "doble daño", infect: "infectar", indestructible: "indestructible", flying: "vuela", vigilance: "vigilancia", menace: "amenaza", reach: "alcance" };
+const kwChips = kw => kw.filter(k => KW_ES[k]).map(k => `<span class="tag">${KW_ES[k]}</span>`).join(" ");
+const ptIn = (c, f) => `<input type="number" class="ptin" min="0" max="99" value="${c[f]}" data-ck="${esc(c.key)}" data-cf="${f}" aria-label="${f === "pow" ? "Fuerza" : "Resistencia"} de ${esc(c.name)}">`;
+function renderResolve() {
+  const r = resolveCombat(fight), nameK = k => { for (const a of fight) { if (a.key === k) return a.name; const b = a.blockers.find(x => x.key === k); if (b) return b.name; } const [o, i] = k.split("|"); return (cardInfo(o, i) || { name: "?" }).name; };
+  const rows = fight.map(a => `<div class="cbrow"><div><b>${esc(a.name)}</b> ${ptIn(a, "pow")}/${ptIn(a, "tou")} ${kwChips(a.kw)}${a.cmd ? ' <span class="tag">comandante</span>' : ""}<br><span class="small muted">→ ${esc(a.tlabel)}</span></div>
+      ${a.blockers.length ? a.blockers.map(b => `<div class="cbblkrow small">bloqueado por <b>${esc(b.name)}</b> ${ptIn(b, "pow")}/${ptIn(b, "tou")} ${kwChips(b.kw)}</div>`).join("") : '<div class="cbblkrow small muted">sin bloquear</div>'}</div>`).join("");
+  const res = [];
+  for (const [id, v] of Object.entries(r.players)) {
+    const bits = [];
+    if (v.life) bits.push(`−${v.life} vidas`);
+    if (v.poison) bits.push(`+${v.poison} veneno`);
+    const cd = Object.values(v.cmd).reduce((s, n) => s + n, 0); if (cd) bits.push(`${cd} de daño de comandante`);
+    if (v.gain) bits.push(`+${v.gain} vidas por vínculo vital`);
+    if (bits.length) res.push(`<li><b>${esc(id === ME.id ? "Tú" : nameOf(id))}</b>: ${bits.join(", ")}</li>`);
+  }
+  for (const [k, n] of Object.entries(r.pw)) res.push(`<li><b>${esc(nameK(k))}</b>: −${n} lealtad</li>`);
+  const dies = r.dies.map(k => `<label class="cbdie"><input type="checkbox" data-die="${esc(k)}"${spared.has(k) ? "" : " checked"}> ${esc(nameK(k))} ${k.startsWith(ME.id + "|") ? "(tuya)" : `(de ${esc(nameOf(k.split("|")[0]))})`}</label>`).join("");
+  $("#cbBody").innerHTML = `${rows}<h4>Resultado</h4>${res.length ? `<ul>${res.join("")}</ul>` : '<p class="small muted">Nadie recibe daño.</p>'}
+    ${dies ? `<p class="small">Van al cementerio (desmarca las que no deban morir):</p><div class="cbdies">${dies}</div>` : ""}`;
+}
+$("#cbBody").addEventListener("input", e => {
+  const inp = e.target.closest("[data-ck]");
+  if (inp && fight) {
+    const v = Math.max(0, Math.min(99, parseInt(inp.value, 10) || 0));
+    for (const a of fight) for (const c of [a, ...a.blockers]) if (c.key === inp.dataset.ck) c[inp.dataset.cf] = v;
+    const keep = document.activeElement && document.activeElement.dataset ? [document.activeElement.dataset.ck, document.activeElement.dataset.cf] : null;
+    renderResolve();
+    if (keep && keep[0]) { const el = $(`#cbBody [data-ck="${CSS.escape(keep[0])}"][data-cf="${keep[1]}"]`); if (el) { el.focus(); el.select && el.select(); } }
+  }
+  const d = e.target.closest("[data-die]");
+  if (d) { if (d.checked) spared.delete(d.dataset.die); else spared.add(d.dataset.die); }
+});
+$("#cbApply").addEventListener("click", () => {
+  if (!fight || !G) return;
+  const r = resolveCombat(fight), dies = r.dies.filter(k => !spared.has(k));
+  const per = {}, P = id => (per[id] ||= { life: 0, poison: 0, cmd: 0, gain: 0, pw: {}, dies: [] });
+  for (const [id, v] of Object.entries(r.players)) if (id !== ME.id) Object.assign(P(id), { life: v.life, poison: v.poison, cmd: v.cmd[ME.id] || 0, gain: v.gain });
+  for (const [k, n] of Object.entries(r.pw)) { const [o, i] = k.split("|"); P(o).pw[i] = n; }
+  const myDies = [];
+  for (const k of dies) { const [o, i] = k.split("|"); if (o === ME.id) myDies.push(i); else P(o).dies.push(i); }
+  net.send("combat", { cid: cid(), by: ME.id, per });
+  const gain = (r.players[ME.id] || {}).gain || 0;
+  if (gain) G.life += gain;
+  const dead = myDies.map(i => (cardInfo(ME.id, i) || { name: "?" }).name);
+  myDies.forEach(i => move(i, "gy", { quiet: true }));
+  const sum = Object.entries(per).map(([id, d]) => `${nameOf(id)} ${d.life ? `−${d.life}` : "0"}${d.poison ? ` (+${d.poison} veneno)` : ""}`).join(", ");
+  addLog(`resuelve el combate: ${sum || "sin daño a jugadores"}${gain ? `; gana ${gain} vidas` : ""}${dead.length ? `; mueren ${dead.join(", ")}` : ""}`);
+  G.atk = null; fight = null; $("#combatDlg").close();
+  checkDeath(); changed();
+});
+// Resultado del combate que me toca (soy defensor): lo aplico en mi mesa.
+function onCombat(m) {
+  if (!G || m.cid !== cid() || !m.per) return;
+  const d = m.per[ME.id];
+  G.blk = null;
+  if (!d) { changed(); return; }
+  const n = v => Math.max(0, Math.min(999, parseInt(v, 10) || 0));
+  const bits = [];
+  if (n(d.life)) { G.life -= n(d.life); bits.push(`pierde ${n(d.life)} vidas`); }
+  if (n(d.poison)) { G.poison += n(d.poison); bits.push(`recibe ${n(d.poison)} de veneno`); }
+  if (n(d.cmd)) { G.cmdDmg[m.by] = (G.cmdDmg[m.by] || 0) + n(d.cmd); bits.push(`${G.cmdDmg[m.by]} de daño de comandante de ${nameOf(m.by)}`); }
+  if (n(d.gain)) { G.life += n(d.gain); bits.push(`gana ${n(d.gain)} vidas`); }
+  for (const [i, v] of Object.entries(d.pw || {})) {
+    const b = bfOf(i); if (!b) continue;
+    b.c = (b.c || 0) - n(v); bits.push(`${G.cards[i].n} pierde ${n(v)} de lealtad`);
+    if (b.c <= 0) { bits.push(`${G.cards[i].n} va al cementerio`); move(i, "gy", { quiet: true }); }
+  }
+  for (const i of d.dies || []) if (bfOf(i)) { bits.push(`muere ${cardInfo(ME.id, i).name}`); move(i, "gy", { quiet: true }); }
+  if (bits.length) addLog(bits.join(", ") + (bits.some(b => b.includes("vidas")) ? ` (vidas ${G.life})` : ""));
+  checkDeath(); changed();
+}
+$("#combatBox").addEventListener("click", e => {
+  const b = e.target.closest("[data-cb]"); if (!b || !G) return;
+  if (b.dataset.cb === "resolve") openResolve();
+  else if (b.dataset.cb === "cancel") cancelAttack();
+  else if (b.dataset.cb === "done") blocksDone();
+});
+
+/* ===================== señalar ===================== */
+// Señalar una carta del campo (tuya o de otro) o a un jugador: se resalta 5 s en la mesa de todos.
+let pings = [], pingTimer = null;
+function ping(o, i) {
+  if (!net || !R.started) return;
+  let what;
+  if (i) {
+    const own = o === ME.id, b = own ? (G && bfOf(i)) : ((pubs.get(o) || { bf: [] }).bf.find(x => x.i === i));
+    if (!b) return;
+    const n = own ? (b.f ? "una carta boca abajo" : faceName(G.cards[i].n, b.tf)) : (b.f ? "una carta boca abajo" : b.n);
+    what = own ? `su ${n}` : `${n} de ${nameOf(o)}`;
+  } else what = o === ME.id ? "su propia mesa" : `a ${nameOf(o)}`;
+  addLog(`señala ${what}`, false, null, i ? { o, i } : { o });
+}
+function addPing(e) {
+  const p = e.ping; if (!p || typeof p.o !== "string") return;
+  pings = pings.filter(x => !(x.o === p.o && x.i === p.i));
+  pings.push({ o: p.o, i: typeof p.i === "string" ? p.i : null, until: Date.now() + 5000 });
+  applyPings();
+  clearTimeout(pingTimer); pingTimer = setTimeout(applyPings, 5100);
+}
+function applyPings() {
+  const now = Date.now(); pings = pings.filter(p => p.until > now);
+  document.querySelectorAll(".ping").forEach(el => el.classList.remove("ping"));
+  for (const p of pings) {
+    const o = CSS.escape(p.o), sel = !p.i ? `[data-seat="${o}"]`
+      : p.o === ME.id ? `#bf .pc[data-i="${CSS.escape(p.i)}"]` : `#opps .pc[data-oid="${o}"][data-oi="${CSS.escape(p.i)}"]`;
+    document.querySelectorAll(sel).forEach(el => el.classList.add("ping"));
+  }
+  if (pings.length) { clearTimeout(pingTimer); pingTimer = setTimeout(applyPings, Math.max(100, Math.min(...pings.map(p => p.until)) - now + 50)); }
 }
 $("#revealBox").addEventListener("click", e => { if (e.target.closest("[data-rclose]")) { revealing = null; renderReveal(); } });
 
@@ -357,7 +649,10 @@ function myPub() {
   return {
     id: ME.id, name: ME.name, deck: G.deck, life: G.life, poison: G.poison, cmdDmg: G.cmdDmg,
     lib: G.lib.length, hand: G.hand.length, ready: G.mull.phase === "done", dead: G.dead || null, art: myArt(),
-    bf: G.bf.map(b => ({ i: b.i, n: b.f ? null : C(b.i).n, u: b.f ? null : faceU(C(b.i), b), x: +b.x.toFixed(3), y: +b.y.toFixed(3), t: b.t ? 1 : 0, f: b.f ? 1 : 0, c: b.c || 0 })),
+    bf: G.bf.map(b => ({ i: b.i, n: b.f ? null : C(b.i).n, u: b.f ? null : faceU(C(b.i), b), x: +b.x.toFixed(3), y: +b.y.toFixed(3), t: b.t ? 1 : 0, f: b.f ? 1 : 0, c: b.c || 0, tf: b.tf ? 1 : 0, cmd: C(b.i).cmd ? 1 : 0 })),
+    // Combate: mis atacantes (si es mi turno) y mis bloqueos, del turno actual.
+    atk: G.atk && G.atk.cid === cid() ? G.atk : null,
+    blk: G.blk && G.blk.cid === cid() ? G.blk : null,
     gy: G.gy.map(i => C(i).n), ex: G.ex.map(i => C(i).n),
     cz: G.cz.map(i => ({ n: C(i).n, tax: (G.tax[i] || 0) * 2 })),
   };
@@ -383,7 +678,9 @@ function move(i, to, opts = {}) {
   if (c.cmd && (to === "gy" || to === "ex") && !opts.force) to = "cz";
   if (to === "bf") {
     const pos = opts.x != null ? { x: opts.x, y: opts.y } : freeSpot(c);
-    G.bf.push({ i, x: pos.x, y: pos.y, t: false, f: !!opts.faceDown, c: 0 });
+    // Los planeswalkers entran con su lealtad inicial como contadores.
+    const sc = SF.cached(c.n), loy = !opts.faceDown && sc && sc.pt && /Planeswalker/.test(sc.pt[0].type) ? num(sc.pt[0].loy) : 0;
+    G.bf.push({ i, x: pos.x, y: pos.y, t: false, f: !!opts.faceDown, c: loy });
     if (from === "cz") G.tax[i] = (G.tax[i] || 0) + 1;
   } else if (to === "lib") { opts.bottom ? G.lib.push(i) : G.lib.unshift(i); }
   else G[to].push(i);
@@ -522,7 +819,8 @@ function render() {
   $("#concede").hidden = !G || !!G.dead;
   const ids = (R.order || []).filter(id => id !== ME.id);
   $("#seats").dataset.n = Math.min(4, ids.length + (G ? 1 : 0)) || 1;
-  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd(); renderJoin(); renderReveal();
+  $("#attackBtn").hidden = !canAttack();
+  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd(); renderJoin(); renderReveal(); renderCombat(); applyPings();
   if (zoomEl && !zoomEl.isConnected) hideZoom();
 }
 // Arte del comandante para el fondo de cada panel (como un tapete).
@@ -530,21 +828,21 @@ const artOf = name => { const c = name && SF.cached(name); return (c && c.art) |
 const bgStyle = url => url ? ` style="background-image:url('${esc(url)}')"` : "";
 // Posición de cada panel en la rejilla: los rivales arriba y tú abajo a la izquierda (como en una mesa de cuatro).
 const seatOrder = k => (k < 2 ? k : k + 2);
-const cardOnBoard = (b, extra = "") => `<div class="pc${extra}${b.t ? " tap" : ""}${b.f ? " down" : ""}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`;
+const cardOnBoard = (b, owner) => `<div class="pc${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-oid="${esc(owner)}" data-oi="${esc(b.i)}" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(b.n, b.u)}>${b.f ? "" : cardImg(b.n, b.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}</div>`;
 function renderOpps(ids) {
   $("#opps").innerHTML = ids.map((id, k) => {
     const p = pubs.get(id), on = people.some(x => x.id === id), order = `order:${seatOrder(k)}`;
     const acts = on ? "" : offActs(id);
-    if (!p) return `<section class="seat${on ? "" : " off"}${isDead(id) ? " dead" : ""}" style="${order}"><span class="sname">${esc(nameOf(id))}</span>${acts || `<p class="muted bfmsg">${on ? "Preparando su mesa…" : "Desconectado"}</p>`}</section>`;
+    if (!p) return `<section class="seat${on ? "" : " off"}${isDead(id) ? " dead" : ""}" data-seat="${esc(id)}" style="${order}"><span class="sname">${esc(nameOf(id))}</span>${acts || `<p class="muted bfmsg">${on ? "Preparando su mesa…" : "Desconectado"}</p>`}</section>`;
     const myDmg = (p.cmdDmg || {})[ME.id] || 0;
     const tags = (isDead(id) ? `<span class="tag bad">Eliminado</span>` : p.ready ? "" : '<span class="tag">Mulligan…</span>') + (on ? "" : '<span class="tag bad">Desconectado</span>');
     const n = Math.min(p.hand, 12), mid = (n - 1) / 2;
     const backs = [...Array(n)].map((_, j) => { const off = j - mid; return `<div class="hc ob" style="--r:${(off * 3).toFixed(1)}deg;--dy:${(off * off * 0.5).toFixed(1)}px;z-index:${j + 1}"><div class="pc back"></div></div>`; }).join("");
     const tile = (z, label) => { const last = p[z][p[z].length - 1];
       return `<div class="zone" data-ozone="${z}" data-oid="${esc(id)}" title="Ver ${z === "gy" ? "su cementerio" : "su exilio"}"><span class="zpill">${label} <b>${p[z].length}</b> <span class="zcar">▾</span></span><div class="ztile">${last ? `<div class="pc"${zoomAttr(last)}>${cardImg(last)}</div>` : ""}</div></div>`; };
-    return `<section class="seat${activeId() === id ? " active" : ""}${on ? "" : " off"}${isDead(id) ? " dead" : ""}" style="${order}">
+    return `<section class="seat${activeId() === id ? " active" : ""}${on ? "" : " off"}${isDead(id) ? " dead" : ""}" data-seat="${esc(id)}" style="${order}">
       <div class="seatbg"${bgStyle(p.art || artOf(p.cz[0] && p.cz[0].n))}></div>${acts}
-      <div class="obf">${p.bf.map(b => cardOnBoard(b)).join("")}</div>
+      <div class="obf">${p.bf.map(b => cardOnBoard(b, id)).join("")}</div>
       <div class="life olife"><span class="lnum${p.life <= 0 ? " bad" : ""}" title="Vidas">${p.life}</span>
         ${p.poison ? `<span class="ltag" title="Veneno">☠ ${p.poison}</span>` : ""}${myDmg ? `<span class="ltag" title="Daño que le ha hecho tu comandante">⚔ ${myDmg}</span>` : ""}</div>
       <span class="sname">${esc(p.name)} ${tags}</span>
@@ -577,6 +875,7 @@ function renderMine() {
   seat.hidden = !G;
   if (!G) { $("#bf").innerHTML = ""; $("#hand").innerHTML = ""; $("#zones").innerHTML = ""; $("#lifeBox").innerHTML = ""; $("#cmdz").innerHTML = ""; return; }
   seat.classList.toggle("active", activeId() === ME.id);
+  seat.dataset.seat = ME.id;
   seat.classList.toggle("dead", !!G.dead);
   const ids = (R.order || []).filter(id => id !== ME.id);
   seat.style.order = String(Math.min(2, ids.length));
@@ -642,6 +941,12 @@ function bindTable() {
   document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
   $("#logToggle").addEventListener("click", () => $("#tgrid").classList.toggle("nolog"));
   $("#concede").addEventListener("click", concede);
+  $("#attackBtn").addEventListener("click", e => {
+    if (!canAttack()) return;
+    const ts = attackTargets();
+    menu(e, [...ts.map(t => [`Todas mis criaturas enderezadas → ${t.label}`, () => attackAll(t)]), null,
+      ["Una a una: ratón sobre la criatura y tecla K", () => {}]]);
+  });
   $("#askJoin").addEventListener("click", () => { renderDeckPick(); $("#joinDlg").showModal(); });
   $("#joinSend").addEventListener("click", sendJoinReq);
   $("#reqBox").addEventListener("click", e => { const b = e.target.closest("[data-req]"); if (b) answerReq(b.dataset.req, b.dataset.ok === "1"); });
@@ -702,7 +1007,12 @@ function bindTable() {
 
   // Menú contextual (clic derecho o pulsación larga).
   document.addEventListener("contextmenu", e => {
-    if ($("#tableView").hidden || !G) return;
+    if ($("#tableView").hidden) return;
+    // Cartas y paneles de los demás: señalar (también para quien solo mira).
+    const oc = e.target.closest("#opps .pc[data-oi]"), os = e.target.closest("#opps [data-seat]");
+    if (oc) { e.preventDefault(); menu(e, [["Señalar esta carta", () => ping(oc.dataset.oid, oc.dataset.oi), "S"], [`Señalar a ${nameOf(oc.dataset.oid)}`, () => ping(oc.dataset.oid)]]); return; }
+    if (os && !e.target.closest("[data-ozone], button")) { e.preventDefault(); menu(e, [[`Señalar a ${nameOf(os.dataset.seat)}`, () => ping(os.dataset.seat)]]); return; }
+    if (!G) return;
     const el = e.target.closest(".pc[data-i]"), z = e.target.closest("[data-zone]");
     if (el && el.dataset.i && el.dataset.z !== "lib") { e.preventDefault(); cardMenu(e, el.dataset.i); return; }
     if (z && z.dataset.zone === "lib") { e.preventDefault(); libMenu(e); return; }
@@ -713,13 +1023,16 @@ function bindTable() {
   addEventListener("keydown", onKey);
   $("#keysBtn").addEventListener("click", () => $("#keysDlg").showModal());
   // La carta que tienes debajo del ratón (para los atajos de teclado).
-  document.addEventListener("pointerover", e => { const el = e.target.closest(".pc.own[data-i]"); if (el) hoverI = el.dataset.i; });
-  document.addEventListener("pointerout", e => { const el = e.target.closest(".pc.own[data-i]"); if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hoverI = null; });
+  document.addEventListener("pointerover", e => { const el = e.target.closest(".pc.own[data-i]"); if (el) hoverI = el.dataset.i; const oc = e.target.closest("#opps .pc[data-oi]"); if (oc) hoverO = { o: oc.dataset.oid, i: oc.dataset.oi }; });
+  document.addEventListener("pointerout", e => {
+    const el = e.target.closest(".pc.own[data-i]"); if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hoverI = null;
+    const oc = e.target.closest("#opps .pc[data-oi]"); if (oc && (!e.relatedTarget || !oc.contains(e.relatedTarget))) hoverO = null;
+  });
 
   bindDrag(); bindZoom();
 }
 /* ===================== atajos de teclado ===================== */
-let hoverI = null;
+let hoverI = null, hoverO = null; // carta mía / de otro jugador bajo el ratón
 const keyName = e => (e.key === "Delete" || e.key === "Backspace" ? "Supr" : e.key === "=" || e.key === "+" ? "+" : e.key === "-" || e.key === "_" ? "-" : e.key.length === 1 ? e.key.toUpperCase() : e.key);
 // Atajos sin carta: con el ratón en cualquier sitio de la mesa.
 const TABLE_KEYS = {
@@ -745,10 +1058,11 @@ function onKey(e) {
     if (act) {
       e.preventDefault(); hideMenu();
       const i = hoverI;
-      if (!["G", "+", "-", "V", "C", "T"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
+      if (!["G", "+", "-", "V", "C", "T", "S", "K"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
       act.run(i); return;
     }
   }
+  if (k === "S" && hoverO) { e.preventDefault(); hideMenu(); ping(hoverO.o, hoverO.i); return; }
   const t = TABLE_KEYS[k];
   if (t) { e.preventDefault(); hideMenu(); t(); }
 }
@@ -911,6 +1225,8 @@ const CARD_ACTS = [
   { key: "V", label: b => (b.f ? "Poner boca arriba" : "Poner boca abajo"), when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.f = !b.f; addLog(b.f ? `pone ${G.cards[i].n} boca abajo` : `pone boca arriba ${G.cards[i].n}`); changed(); } },
   { key: "T", label: b => (b.tf ? "Volver a la cara de delante" : "Transformar"), when: (z, c, b) => !!b && !b.f && !!backOf(c.n),
     run: i => { const b = bfOf(i), n = G.cards[i].n; b.tf = !b.tf; addLog(b.tf ? `transforma ${faceName(n)} en ${faceName(n, true)}` : `vuelve ${faceName(n, true)} a su cara de delante (${faceName(n)})`); changed(); } },
+  { key: "S", label: "Señalar", when: (z, c, b) => !!b, run: i => ping(ME.id, i) },
+  { key: "K", label: b => combatLabel(b.i), when: (z, c, b) => !!b && !!combatLabel(c.i), run: i => combatKey(i) },
   { key: "C", label: "Copiar (crea una ficha igual)", when: (z, c, b) => !(b && b.f), run: i => { const c = G.cards[i], b = bfOf(i); createToken(faceName(c.n, b && b.tf), faceU(c, b) || img(c.n, "img"), true); } },
   null,
   { key: "M", label: "A la mano", when: z => z !== "hand", run: i => move(i, "hand") },
