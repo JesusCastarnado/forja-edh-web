@@ -94,6 +94,7 @@
     <span class="tbrand">Forja <b>EDH</b></span>
     <span class="tturn" id="turnInfo"></span>
     <button class="btn sm primary" id="passTurn" title="Pasar turno (Espacio)">Pasar turno</button>
+    <button class="btn sm primary" id="askJoin" title="Pide al anfitrión entrar en la partida con un mazo" hidden>Pedir entrar</button>
     <button class="btn sm" id="untapAll" title="Enderezar todos tus permanentes">Enderezar</button>
     <button class="btn sm" id="diceBtn">Dados</button>
     <button class="btn sm" id="tokenBtn">Ficha</button>
@@ -101,6 +102,7 @@
     <span class="grow"></span>
     <span class="pcode small">Sala <b id="tCode"></b></span>
     <button class="btn sm" id="logToggle">Registro</button>
+    <button class="btn sm" id="concede" title="Te das por vencido: quedas eliminado y la partida sigue sin ti">Rendirse</button>
     <button class="btn sm" id="leaveGame">Salir</button>
   </div>
   <div class="tgrid" id="tgrid">
@@ -127,11 +129,20 @@
   </div>
   <div class="mull" id="mull" hidden></div>
   <div class="mull endbox" id="endBox" hidden></div>
+  <div class="reqs" id="reqBox" hidden></div>
+  <div class="reveal" id="revealBox" hidden></div>
 </div>
 
 <div class="pzoom" id="pzoom" hidden><img alt=""></div>
 <div class="cmenu" id="cmenu" hidden></div>
-<dialog id="viewer" class="pdlg"><div class="vhead"><h3 id="vTitle"></h3><button class="btn sm" data-close>Cerrar</button></div><p class="muted small" id="vNote"></p><div class="pvgrid" id="vGrid"></div></dialog>
+<dialog id="viewer" class="pdlg"><div class="vhead"><h3 id="vTitle"></h3><button class="btn sm" data-close>Cerrar</button></div><p class="muted small" id="vNote"></p>
+  <input id="vFilter" class="vfilter" type="search" placeholder="Filtrar por nombre o tipo (Forest, criatura, instant…)" autocomplete="off">
+  <div class="pvgrid" id="vGrid"></div><p class="muted small" id="vNone" hidden>Ninguna carta coincide.</p>
+  <div class="row vfoot" id="vFoot" hidden><span class="muted small grow" id="vSum"></span><button class="btn primary" id="scryDone">Hecho</button></div></dialog>
+<dialog id="joinDlg" class="pdlg"><div class="vhead"><h3>Pedir entrar en la partida</h3><button class="btn sm" data-close>Cerrar</button></div>
+  <p class="muted small">Elige con qué mazo juegas. El anfitrión recibe tu solicitud y, si te acepta, te sientas en la mesa: robas tu mano inicial y juegas después del último jugador.</p>
+  <div id="deckPick3" class="pdecks"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:10px"><span class="muted small grow" id="joinHint"></span><button class="btn primary" id="joinSend">Enviar solicitud</button></div></dialog>
 <dialog id="tokenDlg" class="pdlg"><div class="vhead"><h3>Crear ficha</h3><button class="btn sm" data-close>Cerrar</button></div>
   <form id="tokenForm" class="row"><input id="tokenQ" placeholder="Treasure, Soldier, Zombie…" autocomplete="off"><button class="btn">Buscar</button></form>
   <div class="pvgrid" id="tokenGrid"></div></dialog>
@@ -147,6 +158,7 @@
     <dt>X</dt><dd>Al exilio</dd>
     <dt>A / Z</dt><dd>Encima / debajo de la biblioteca</dd>
     <dt>V</dt><dd>Boca abajo / boca arriba</dd>
+    <dt>T</dt><dd>Transformar (cartas de dos caras)</dd>
     <dt>+ / −</dt><dd>Poner / quitar un contador</dd>
   </dl>
   <p class="muted small">Y en cualquier sitio de la mesa:</p>
