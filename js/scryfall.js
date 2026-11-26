@@ -70,6 +70,10 @@ export function toCard(o) {
     isCmd: (/Legendary/.test(typeLine) && /Creature/.test(typeLine)) || /can be your commander/i.test(text),
   };
   c.flags = tagFlags(c);
+  // Para el combate de «Jugar»: fuerza, resistencia, lealtad y tipo de cada cara, y palabras clave en minúsculas.
+  const face = f => ({ pow: f.power ?? null, tou: f.toughness ?? null, loy: f.loyalty ?? null, type: f.type_line || "" });
+  c.pt = faces ? faces.map(face) : [face(o)];
+  c.kw = (o.keywords || []).map(k => String(k).toLowerCase());
   return c;
 }
 
