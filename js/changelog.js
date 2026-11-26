@@ -2,6 +2,12 @@
 // Para añadir una novedad, ponla ARRIBA con el siguiente `id` (un número más que el primero).
 // `ir`: la pestaña donde está (#analizar, #guiado…). `ia: true` si usa la IA (solo para el dueño de la web).
 export const CHANGELOG = [
+  { id: 36, fecha: "2026-11-26", titulo: "Jugar: transforma cartas y busca en tu biblioteca", ir: "jugar.html",
+    texto: "Las cartas de dos caras ya se pueden transformar en la mesa (clic derecho → «Transformar» o la tecla T), y los demás ven la cara nueva. Y al buscar en tu biblioteca, cementerio o exilio hay un cuadro para filtrar por nombre o por tipo («Forest», «criatura», «instant»…)." },
+  { id: 35, fecha: "2026-11-26", titulo: "Jugar: entra en una partida ya empezada", ir: "jugar.html",
+    texto: "¿Llegas tarde? Entra en la sala, pulsa «Pedir entrar» y elige tu mazo: el anfitrión recibe la solicitud y, si te deja, te sientas en la mesa con tu mano inicial y juegas después del último jugador." },
+  { id: 34, fecha: "2026-11-26", titulo: "Jugar: partidas que no se quedan paradas", ir: "jugar.html",
+    texto: "Si alguien se desconecta en su turno, el anfitrión puede saltárselo o darlo por eliminado (si vuelve, se reincorpora). Hay un botón «Rendirse» para retirarte de la partida, y si entras a mitad de partida o se te corta la conexión, ves lo último del registro y del chat." },
   { id: 33, fecha: "2026-11-26", titulo: "Invítame a un café", ir: "",
     texto: "Forja EDH es gratis y sin anuncios. Si te está siendo útil y quieres ayudar a mantenerla (y a pagar la IA), arriba tienes el botón «☕ Apoyar» para enviar lo que quieras por Bizum o por PayPal. ¡Gracias!" },
   { id: 32, fecha: "2026-11-26", titulo: "Mándanos sugerencias", ir: "#sugerencias",

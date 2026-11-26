@@ -33,10 +33,14 @@ const pubs = new Map();   // id → estado público de cada jugador
 let G = null;             // mi partida (privada)
 let logs = [];
 let dragging = false, pendingRender = false;
+// Entrar a mitad de partida: solicitudes que recibe el anfitrión (id → { name, deck }) y la mía.
+const reqs = new Map();
+let myReq = null, myReqTimer = null, reqNote = "";
 
 /* ===================== arranque ===================== */
 init();
 async function init() {
+  cleanSaves();
   $("#myName").value = ME.name;
   $("#myName").addEventListener("input", e => { ME.name = e.target.value.trim().slice(0, 24); store.set("forja-autor", ME.name); trackMe(); });
   chosen = (() => { try { return JSON.parse(store.get("forja-play-deck") || "null"); } catch { return null; } })();
@@ -67,8 +71,10 @@ function renderDeckPick() {
       <span class="nm">${esc(d.name)}</span><span class="cm">${esc((d.cmds || []).join(" + "))}</span></button>`;
   }).join("") : '<p class="muted small">Aún no tienes mazos guardados. Guarda uno en <a href="index.html#mazos">Mis mazos</a> o pega una lista aquí abajo.</p>')
     + (chosen && !chosen.id ? `<button class="pdeck on"><span class="art"></span><span class="nm">${esc(chosen.name)}</span><span class="cm">Lista pegada</span></button>` : "");
-  $("#deckPick").innerHTML = html; $("#deckPick2").innerHTML = html;
+  $("#deckPick").innerHTML = html; $("#deckPick2").innerHTML = html; $("#deckPick3").innerHTML = html;
   $("#deckHint").textContent = chosen ? `Jugarás con «${chosen.name}».` : "Elige uno de «Mis mazos» o pega una lista.";
+  $("#joinHint").textContent = chosen ? `Jugarás con «${chosen.name}».` : "Elige un mazo.";
+  $("#joinSend").disabled = !chosen;
 }
 function choose(d) {
   chosen = d; store.set("forja-play-deck", JSON.stringify(d)); renderDeckPick(); trackMe();
@@ -125,7 +131,7 @@ function renderRooms() {
 /* ===================== sala ===================== */
 const host = () => { const p = [...people].sort((a, b) => a.joined - b.joined || String(a.id).localeCompare(b.id)); return p[0] || null; };
 const amHost = () => { const h = host(); return !!h && h.id === ME.id; };
-const meta = () => ({ id: ME.id, name: ME.name || "Jugador", joined: joinedAt, deck: chosen ? chosen.name : "", art: chosen ? chosen.art : "", hasDeck: !!chosen, room: room ? { name: room.name, max: room.max, priv: room.priv } : null });
+const meta = () => ({ id: ME.id, name: ME.name || "Jugador", joined: joinedAt, deck: chosen ? chosen.name : "", art: chosen ? chosen.art : "", hasDeck: !!chosen, room: room ? { name: room.name, max: room.max, priv: room.priv, started: !!R.started } : null });
 let joinedAt = 0;
 function trackMe() { if (net) net.track(meta()); }
 
@@ -144,7 +150,7 @@ function joinRoom(code, opts = {}) {
   net = Net.room(code, ME.id, {
     onPeople: list => { people = list; adoptRoomInfo(); announce(); onPeopleChange(); },
     onMsg,
-    onStatus: st => { if (st === "ok") { net.send("hello"); if (G) sendPub(true); } },
+    onStatus: st => { if (st === "ok") { net.send("hello", { from: ME.id }); if (G) sendPub(true); } },
   });
   net.track(meta());
   history.replaceState(null, "", "#sala=" + code);
@@ -155,6 +161,7 @@ function leaveRoom(silent) {
   if (net) { if (G && R.started) addLog(`${ME.name} sale de la partida`, true); net.close(); }
   if (lobbyNet) lobbyNet.untrack();
   net = null; room = null; people = []; R = { v: 0, started: false }; G = null; pubs.clear();
+  reqs.clear(); myReq = null; reqNote = ""; clearTimeout(myReqTimer); $("#reqBox").hidden = true;
   if (silent !== true) { history.replaceState(null, "", location.pathname); showView("lobby"); }
 }
 // El nombre y tamaño de la sala los decide quien la creó (va en su Presence).
@@ -169,6 +176,8 @@ function announce() {
 }
 function onPeopleChange() {
   if (!R.started) {
+    // Si la partida ya empezó (lo dice el anfitrión), quien llega mira y puede pedir entrar: no se le echa.
+    if (room.started) { renderRoom(); return; }
     // ¿Sala llena? Se va el último en llegar.
     const players = [...people].sort((a, b) => a.joined - b.joined);
     const idx = players.findIndex(p => p.id === ME.id);
@@ -201,7 +210,27 @@ function startAsHost() {
 
 /* ===================== mensajes ===================== */
 function onMsg(k, m) {
-  if (k === "hello") { if (G) sendPub(true); if (amHost() && R.v) net.send("room", { R }); return; }
+  if (k === "hello") {
+    if (G) sendPub(true);
+    if (amHost() && R.v) net.send("room", { R });
+    // Quien llega a mitad de partida (o se reconecta) recibe del anfitrión lo último del registro.
+    if (amHost() && m.from && logs.length) net.send("logs", { to: m.from, logs: logs.slice(-60) });
+    return;
+  }
+  if (k === "logs") { if (m.to === ME.id && Array.isArray(m.logs)) mergeLogs(m.logs); return; }
+  if (k === "joinreq") {
+    if (amHost() && R.started && m.from && !(R.order || []).includes(m.from)) {
+      reqs.set(m.from, { name: String(m.name || "Alguien").slice(0, 24), deck: String(m.deck || "").slice(0, 80) });
+      renderReqs();
+    }
+    return;
+  }
+  if (k === "joinres") {
+    if (m.to !== ME.id) return;
+    myReq = null; clearTimeout(myReqTimer);
+    if (!m.ok) { reqNote = m.full ? "La partida ya está llena. Puedes seguir mirando." : "El anfitrión no te ha dejado entrar. Puedes seguir mirando."; setTimeout(() => { reqNote = ""; renderReqs(); }, 7000); }
+    render(); return;
+  }
   if (k === "room") { if (m.R && m.R.v > R.v) { R = m.R; onRoomState(); } return; }
   if (k === "pub") { if (m.p && m.p.id && m.p.id !== ME.id) { pubs.set(m.p.id, m.p); resolveNames(m.p); scheduleRender(); } return; }
   if (k === "log") { logs.push(m.e); if (logs.length > 300) logs.shift(); renderLog(); clearTimeout(onMsg.st); onMsg.st = setTimeout(save, 500); return; }
@@ -209,12 +238,15 @@ function onMsg(k, m) {
 let lastTurnSeen = "";
 function onRoomState() {
   announce(); save();
+  if (amHost() && room && !!(room.started) !== !!R.started) { room.started = !!R.started; trackMe(); }
   if (!R.started) { renderRoom(); return; }
   if (!G || G.gid !== R.gid) {
     G = null;
     if (R.order.includes(ME.id) && chosen) { startGame(); return; }
   }
   showView("table");
+  // Me dieron por eliminado mientras estaba desconectado: lo ves al volver (y puedes reincorporarte).
+  if (G && !G.dead && (R.out || []).includes(ME.id)) { G.dead = "te dieron por eliminado mientras estabas desconectado"; endSeen = ""; save(); sendPub(true); }
   const key = R.gid + ":" + R.turnNo;
   if (key !== lastTurnSeen) {
     const first = !lastTurnSeen; lastTurnSeen = key;
@@ -233,6 +265,15 @@ function addLog(text, chat = false) {
   save();
   renderLog();
 }
+// Junta el registro recibido con el mío, sin repetir entradas y por orden de hora.
+const logKey = e => `${e.at}|${e.from}|${e.text}`;
+function mergeLogs(list) {
+  const seen = new Set(logs.map(logKey));
+  const add = list.filter(e => e && typeof e.text === "string" && typeof e.at === "number" && !seen.has(logKey(e)));
+  if (!add.length) return;
+  logs = [...logs, ...add].sort((a, b) => a.at - b.at).slice(-300);
+  save(); renderLog();
+}
 function renderLog() {
   const box = $("#logList"); if (!box) return;
   box.innerHTML = logs.slice(-150).map(e => `<p class="${e.chat ? "lchat" : ""}"><b>${esc(e.who)}</b>${e.chat ? ": " : " "}${esc(e.text)}</p>`).join("");
@@ -243,7 +284,25 @@ function renderLog() {
 // Cada jugador guarda su mesa aparte (dos pestañas del mismo navegador son dos jugadores).
 const saveKey = (code, id = ME.id) => "forja-play-g-" + code + ":" + id;
 function loadSaved(code) { try { const s = JSON.parse(store.get(saveKey(code)) || "null"); return s && s.R ? s : null; } catch { return null; } }
-function save() { if (room && R.started) store.set(saveKey(room.code), JSON.stringify({ R, G, logs: logs.slice(-80) })); }
+function save() { if (room && R.started) store.set(saveKey(room.code), JSON.stringify({ at: Date.now(), R, G, logs: logs.slice(-80) })); }
+// Borra las mesas guardadas de partidas de hace más de una semana (si no, se acumulan en el navegador).
+function cleanSaves() {
+  try {
+    const WEEK = 7 * 864e5, now = Date.now(), keys = [];
+    for (let k = 0; k < localStorage.length; k++) keys.push(localStorage.key(k));
+    for (const key of keys.filter(k => k && k.startsWith("forja-play-g-"))) {
+      let s = null; try { s = JSON.parse(localStorage.getItem(key)); } catch {}
+      if (!s || typeof s !== "object") localStorage.removeItem(key);
+      else if (!s.at) { s.at = now; localStorage.setItem(key, JSON.stringify(s)); } // guardadas antes de tener fecha: cuentan desde hoy
+      else if (now - s.at > WEEK) localStorage.removeItem(key);
+    }
+    const left = keys.filter(k => k && k.startsWith("forja-play-g-") && localStorage.getItem(k) != null);
+    for (const key of keys.filter(k => k && k.startsWith("forja-play-me-"))) {
+      const code = key.slice("forja-play-me-".length);
+      if (!left.some(k => k.startsWith("forja-play-g-" + code + ":"))) localStorage.removeItem(key);
+    }
+  } catch {}
+}
 
 async function startGame() {
   showView("table");
@@ -278,7 +337,7 @@ function myPub() {
   return {
     id: ME.id, name: ME.name, deck: G.deck, life: G.life, poison: G.poison, cmdDmg: G.cmdDmg,
     lib: G.lib.length, hand: G.hand.length, ready: G.mull.phase === "done", dead: G.dead || null, art: myArt(),
-    bf: G.bf.map(b => ({ i: b.i, n: b.f ? null : C(b.i).n, u: b.f ? null : C(b.i).u || null, x: +b.x.toFixed(3), y: +b.y.toFixed(3), t: b.t ? 1 : 0, f: b.f ? 1 : 0, c: b.c || 0 })),
+    bf: G.bf.map(b => ({ i: b.i, n: b.f ? null : C(b.i).n, u: b.f ? null : faceU(C(b.i), b), x: +b.x.toFixed(3), y: +b.y.toFixed(3), t: b.t ? 1 : 0, f: b.f ? 1 : 0, c: b.c || 0 })),
     gy: G.gy.map(i => C(i).n), ex: G.ex.map(i => C(i).n),
     cz: G.cz.map(i => ({ n: C(i).n, tax: (G.tax[i] || 0) * 2 })),
   };
@@ -417,6 +476,11 @@ function cardImg(name, u, size) {
   return src ? `<img src="${esc(src)}" alt="${esc(name)}" draggable="false" loading="lazy">` : `<span class="pname-ph">${esc(name || "?")}</span>`;
 }
 const zoomAttr = (name, u) => name ? ` data-zoom="${esc(name)}"${u ? ` data-zu="${esc(u)}"` : ""}` : "";
+// Cartas de dos caras: imagen de la cara de atrás (vacía si la carta solo tiene una).
+const backOf = n => { const c = n && SF.cached(n); return (c && c.back) || ""; };
+// Imagen de la cara que está a la vista: la de atrás si en el campo está transformada (b.tf).
+const faceU = (c, b) => (b && b.tf && backOf(c.n)) || c.u || null;
+const faceName = (n, back) => { const p = String(n).split(" // "); return back && p[1] ? p[1] : p[0]; };
 
 /* ===================== pintar ===================== */
 function showView(v) {
@@ -435,9 +499,10 @@ function render() {
   $("#turnInfo").innerHTML = `Turno ${R.turnNo} · <b>${esc(act === ME.id ? "Tu turno" : nameOf(act))}</b>${spect.length ? ` <span class="muted small">· Mirando: ${spect.map(p => esc(p.name)).join(", ")}</span>` : ""}`;
   $("#passTurn").hidden = act !== ME.id || !G;
   ["#untapAll", "#diceBtn", "#tokenBtn"].forEach(s => $(s).hidden = !G);
+  $("#concede").hidden = !G || !!G.dead;
   const ids = (R.order || []).filter(id => id !== ME.id);
   $("#seats").dataset.n = Math.min(4, ids.length + (G ? 1 : 0)) || 1;
-  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd();
+  renderOpps(ids); renderMine(); renderMull(); renderLog(); renderEnd(); renderJoin();
   if (zoomEl && !zoomEl.isConnected) hideZoom();
 }
 // Arte del comandante para el fondo de cada panel (como un tapete).
@@ -449,15 +514,16 @@ const cardOnBoard = (b, extra = "") => `<div class="pc${extra}${b.t ? " tap" : "
 function renderOpps(ids) {
   $("#opps").innerHTML = ids.map((id, k) => {
     const p = pubs.get(id), on = people.some(x => x.id === id), order = `order:${seatOrder(k)}`;
-    if (!p) return `<section class="seat" style="${order}"><span class="sname">${esc(nameOf(id))}</span><p class="muted bfmsg">${on ? "Preparando su mesa…" : "Desconectado"}</p></section>`;
+    const acts = on ? "" : offActs(id);
+    if (!p) return `<section class="seat${on ? "" : " off"}${isDead(id) ? " dead" : ""}" style="${order}"><span class="sname">${esc(nameOf(id))}</span>${acts || `<p class="muted bfmsg">${on ? "Preparando su mesa…" : "Desconectado"}</p>`}</section>`;
     const myDmg = (p.cmdDmg || {})[ME.id] || 0;
-    const tags = (p.dead ? `<span class="tag bad">Eliminado</span>` : p.ready ? "" : '<span class="tag">Mulligan…</span>') + (on ? "" : '<span class="tag bad">Desconectado</span>');
+    const tags = (isDead(id) ? `<span class="tag bad">Eliminado</span>` : p.ready ? "" : '<span class="tag">Mulligan…</span>') + (on ? "" : '<span class="tag bad">Desconectado</span>');
     const n = Math.min(p.hand, 12), mid = (n - 1) / 2;
     const backs = [...Array(n)].map((_, j) => { const off = j - mid; return `<div class="hc ob" style="--r:${(off * 3).toFixed(1)}deg;--dy:${(off * off * 0.5).toFixed(1)}px;z-index:${j + 1}"><div class="pc back"></div></div>`; }).join("");
     const tile = (z, label) => { const last = p[z][p[z].length - 1];
       return `<div class="zone" data-ozone="${z}" data-oid="${esc(id)}" title="Ver ${z === "gy" ? "su cementerio" : "su exilio"}"><span class="zpill">${label} <b>${p[z].length}</b> <span class="zcar">▾</span></span><div class="ztile">${last ? `<div class="pc"${zoomAttr(last)}>${cardImg(last)}</div>` : ""}</div></div>`; };
-    return `<section class="seat${activeId() === id ? " active" : ""}${on ? "" : " off"}${p.dead ? " dead" : ""}" style="${order}">
-      <div class="seatbg"${bgStyle(p.art || artOf(p.cz[0] && p.cz[0].n))}></div>
+    return `<section class="seat${activeId() === id ? " active" : ""}${on ? "" : " off"}${isDead(id) ? " dead" : ""}" style="${order}">
+      <div class="seatbg"${bgStyle(p.art || artOf(p.cz[0] && p.cz[0].n))}></div>${acts}
       <div class="obf">${p.bf.map(b => cardOnBoard(b)).join("")}</div>
       <div class="life olife"><span class="lnum${p.life <= 0 ? " bad" : ""}" title="Vidas">${p.life}</span>
         ${p.poison ? `<span class="ltag" title="Veneno">☠ ${p.poison}</span>` : ""}${myDmg ? `<span class="ltag" title="Daño que le ha hecho tu comandante">⚔ ${myDmg}</span>` : ""}</div>
@@ -471,6 +537,14 @@ function renderOpps(ids) {
         </div>
       </div></section>`;
   }).join("");
+}
+// Rival desconectado: el anfitrión puede saltar su turno o darlo por eliminado para que la partida no se quede parada.
+function offActs(id) {
+  if (!amHost() || isDead(id)) return "";
+  const active = activeId() === id;
+  return `<div class="offacts"><p class="small">Se ha desconectado${active ? " en su turno" : ""}.</p><div class="row">
+    ${active ? `<button class="btn sm primary" data-skip="${esc(id)}">Saltar su turno</button>` : ""}
+    <button class="btn sm" data-out="${esc(id)}" title="Si vuelve, puede reincorporarse">Darlo por eliminado</button></div></div>`;
 }
 let lifeOpen = false;
 function myArt() {
@@ -489,8 +563,8 @@ function renderMine() {
   const art = myArt(); $("#myBg").style.backgroundImage = art ? `url('${art}')` : "";
   $("#mySeatName").innerHTML = `${esc(ME.name || "Tú")} <span class="tag">Tú</span>${G.dead ? ' <span class="tag bad">Eliminado</span>' : ""}`;
   $("#bf").innerHTML = G.bf.map(b => {
-    const c = G.cards[b.i];
-    return `<div class="pc own${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-i="${b.i}" data-z="bf" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(c.n, c.u)}>${b.f ? "" : cardImg(c.n, c.u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}${c.tok ? '<span class="tokb">Ficha</span>' : ""}</div>`;
+    const c = G.cards[b.i], u = faceU(c, b);
+    return `<div class="pc own${b.t ? " tap" : ""}${b.f ? " down" : ""}" data-i="${b.i}" data-z="bf" style="left:${b.x * 100}%;top:${b.y * 100}%"${zoomAttr(c.n, u)}>${b.f ? "" : cardImg(c.n, u)}${b.c ? `<span class="badge">${b.c > 0 ? "+" : ""}${b.c}</span>` : ""}${c.tok ? '<span class="tokb">Ficha</span>' : ""}</div>`;
   }).join("") || '<p class="muted bfmsg">Tu campo de batalla: arrastra aquí las cartas de tu mano.</p>';
   // Mano en abanico: cada carta un poco girada y más baja cuanto más lejos del centro, con su coste encima.
   const n = G.hand.length, mid = (n - 1) / 2, step = Math.min(4, 36 / Math.max(n, 1));
@@ -547,6 +621,10 @@ function bindTable() {
   });
   document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
   $("#logToggle").addEventListener("click", () => $("#tgrid").classList.toggle("nolog"));
+  $("#concede").addEventListener("click", concede);
+  $("#askJoin").addEventListener("click", () => { renderDeckPick(); $("#joinDlg").showModal(); });
+  $("#joinSend").addEventListener("click", sendJoinReq);
+  $("#reqBox").addEventListener("click", e => { const b = e.target.closest("[data-req]"); if (b) answerReq(b.dataset.req, b.dataset.ok === "1"); });
   $("#leaveGame").addEventListener("click", () => {
     if (G && !confirm("¿Salir de la partida? Si vuelves a entrar con el mismo código, recuperas tu mesa.")) return;
     leaveRoom();
@@ -567,6 +645,9 @@ function bindTable() {
 
   // Ver cementerio/exilio de un rival.
   $("#opps").addEventListener("click", e => {
+    const sk = e.target.closest("[data-skip]"), out = e.target.closest("[data-out]");
+    if (sk) { skipTurn(sk.dataset.skip); return; }
+    if (out) { markOut(out.dataset.out); return; }
     const b = e.target.closest("[data-ozone]"); if (!b) return;
     const p = pubs.get(b.dataset.oid); if (!p) return;
     viewer(`${b.dataset.ozone === "gy" ? "Cementerio" : "Exilio"} de ${p.name}`, [...p[b.dataset.ozone]].reverse().map(n => ({ n })), null);
@@ -644,7 +725,7 @@ function onKey(e) {
     if (act) {
       e.preventDefault(); hideMenu();
       const i = hoverI;
-      if (!["G", "+", "-", "V", "C"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
+      if (!["G", "+", "-", "V", "C", "T"].includes(k)) hoverI = null; // la carta se va: el siguiente atajo no debe moverla otra vez
       act.run(i); return;
     }
   }
@@ -653,7 +734,8 @@ function onKey(e) {
 }
 /* ===================== derrota y victoria ===================== */
 // Pierdes con 0 vidas o menos, 10 contadores de veneno o 21 de daño de un mismo comandante.
-const isDead = id => (id === ME.id ? !!(G && G.dead) : !!(pubs.get(id) || {}).dead);
+// También cuenta como eliminado quien el anfitrión dio por eliminado al desconectarse (R.out).
+const isDead = id => (R.out || []).includes(id) || (id === ME.id ? !!(G && G.dead) : !!(pubs.get(id) || {}).dead);
 function deathReason() {
   if (G.life <= 0) return "sin vidas";
   if (G.poison >= 10) return "10 contadores de veneno";
@@ -670,17 +752,96 @@ function checkDeath() {
 }
 function revive() {
   if (!G || !G.dead) return;
+  const wasOut = (R.out || []).includes(ME.id);
   G.dead = null; G.life = Math.max(G.life, 1); G.poison = Math.min(G.poison, 9);
   Object.keys(G.cmdDmg).forEach(k => { G.cmdDmg[k] = Math.min(G.cmdDmg[k], 20); });
-  addLog(`vuelve a la partida (había sido un error) con ${G.life} vidas`);
+  addLog(`vuelve a la partida${wasOut ? "" : " (había sido un error)"} con ${G.life} vidas`);
   changed();
+  if (wasOut) { R = { ...R, v: R.v + 1, out: R.out.filter(x => x !== ME.id) }; net.send("room", { R }); onRoomState(); }
 }
-// Pasa el turno al siguiente jugador que siga vivo.
-function passTurn() {
+// Te rindes: quedas eliminado como si hubieras perdido (y puedes volver con «Ha sido un error»).
+function concede() {
+  if (!G || G.dead || !confirm("¿Rendirte? Quedas eliminado y la partida sigue sin ti.")) return;
+  G.dead = "te has rendido"; endSeen = "";
+  addLog("se rinde");
+  changed();
+  if (activeId() === ME.id) setTimeout(passTurn, 50);
+}
+// Siguiente turno: el del siguiente jugador que siga vivo.
+function nextTurn() {
   const n = R.order.length; let t = R.turn + 1;
   for (let k = 0; k < n - 1 && isDead(R.order[t % n]); k++) t++;
   R = { ...R, v: R.v + 1, turn: t, turnNo: R.turnNo + 1 };
+}
+function passTurn() {
+  nextTurn();
   addLog(`pasa el turno a ${nameOf(activeId())}`);
+  net.send("room", { R }); onRoomState();
+}
+// El anfitrión pasa el turno de un jugador desconectado (si no, la partida se queda parada).
+function skipTurn(id) {
+  if (!amHost() || activeId() !== id || people.some(p => p.id === id)) return;
+  const who = nameOf(id);
+  nextTurn();
+  addLog(`salta el turno de ${who} (desconectado) y se lo pasa a ${nameOf(activeId())}`);
+  net.send("room", { R }); onRoomState();
+}
+/* ===================== entrar a mitad de partida ===================== */
+const gameOver = () => { const o = R.order || []; return o.length > 1 && o.filter(id => !isDead(id)).length <= 1; };
+const tableFull = () => (R.order || []).length >= ((room && room.max) || 4);
+// Quien mira (sin mesa) puede pedir entrar mientras la partida siga y quede sitio.
+const canAskJoin = () => !!(net && R.started && !G && !(R.order || []).includes(ME.id) && !gameOver() && !tableFull());
+function sendJoinReq() {
+  if (!canAskJoin() || !chosen) return;
+  $("#joinDlg").close();
+  if (amHost()) { addPlayer(ME.id, ME.name); return; } // el anfitrión que miraba se sienta sin pedir permiso
+  myReq = Date.now();
+  net.send("joinreq", { from: ME.id, name: ME.name || "Jugador", deck: chosen.name });
+  addLog(`pide entrar en la partida con «${chosen.name}»`);
+  // Si nadie responde (p. ej. el anfitrión recargó la página), se puede volver a pedir.
+  clearTimeout(myReqTimer); myReqTimer = setTimeout(() => { myReq = null; render(); }, 30000);
+  render();
+}
+// Sienta a un jugador nuevo: juega después del último de la ronda (el turno actual no cambia).
+function addPlayer(id, name) {
+  const n = R.order.length;
+  R = { ...R, v: R.v + 1, turn: R.turn % n, order: [...R.order, id] };
+  addLog(id === ME.id ? "se sienta en la partida" : `deja entrar a ${name} en la partida`);
+  net.send("room", { R }); onRoomState();
+}
+function answerReq(id, ok) {
+  const q = reqs.get(id); reqs.delete(id); renderReqs();
+  if (!q || !amHost() || (R.order || []).includes(id)) return;
+  if (ok && (tableFull() || gameOver())) { net.send("joinres", { to: id, ok: false, full: true }); return; }
+  net.send("joinres", { to: id, ok });
+  if (ok) addPlayer(id, q.name);
+  else addLog(`no deja entrar a ${q.name}`);
+}
+function renderReqs() {
+  const box = $("#reqBox");
+  // Solo las de quien sigue conectado y aún no juega.
+  for (const id of [...reqs.keys()]) if (!people.some(p => p.id === id) || (R.order || []).includes(id) || !amHost()) reqs.delete(id);
+  const html = [...reqs].map(([id, q]) => `<div class="req"><p><b>${esc(q.name)}</b> quiere entrar en la partida${q.deck ? ` con «${esc(q.deck)}»` : ""}.</p>
+      <div class="row"><button class="btn sm" data-req="${esc(id)}" data-ok="0">Rechazar</button><button class="btn sm primary" data-req="${esc(id)}" data-ok="1">Dejarle entrar</button></div></div>`).join("")
+    + (reqNote ? `<div class="req"><p>${esc(reqNote)}</p></div>` : "");
+  box.innerHTML = html; box.hidden = !html;
+}
+function renderJoin() {
+  const b = $("#askJoin");
+  b.hidden = !canAskJoin();
+  b.disabled = !!myReq;
+  b.textContent = myReq ? "Esperando al anfitrión…" : "Pedir entrar";
+  renderReqs();
+}
+// El anfitrión da por eliminado a un jugador desconectado (si no vuelve, la partida puede terminar).
+function markOut(id) {
+  if (!amHost() || isDead(id) || people.some(p => p.id === id)) return;
+  const who = nameOf(id);
+  if (!confirm(`¿Dar por eliminado a ${who}? Si vuelve a entrar, podrá reincorporarse.`)) return;
+  const wasActive = activeId() === id;
+  R = { ...R, v: R.v + 1, out: [...(R.out || []), id] };
+  if (wasActive) nextTurn();
+  addLog(`da por eliminado a ${who} (desconectado)${wasActive ? ` y pasa el turno a ${nameOf(activeId())}` : ""}`);
   net.send("room", { R }); onRoomState();
 }
 // Cartel de «Has perdido» (solo para ti) o de «X gana la partida» (para todos).
@@ -728,7 +889,9 @@ const CARD_ACTS = [
   { key: "+", label: "+1 contador", when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.c = (b.c || 0) + 1; addLog(`pone un contador en ${nameOrHidden(i, b)} (${b.c})`); changed(); } },
   { key: "-", label: "−1 contador", when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.c = (b.c || 0) - 1; addLog(`quita un contador de ${nameOrHidden(i, b)} (${b.c})`); changed(); } },
   { key: "V", label: b => (b.f ? "Poner boca arriba" : "Poner boca abajo"), when: (z, c, b) => !!b, run: i => { const b = bfOf(i); b.f = !b.f; addLog(b.f ? `pone ${G.cards[i].n} boca abajo` : `pone boca arriba ${G.cards[i].n}`); changed(); } },
-  { key: "C", label: "Copiar (crea una ficha igual)", when: (z, c, b) => !(b && b.f), run: i => { const c = G.cards[i]; createToken(c.n, c.u || img(c.n, "img"), true); } },
+  { key: "T", label: b => (b.tf ? "Volver a la cara de delante" : "Transformar"), when: (z, c, b) => !!b && !b.f && !!backOf(c.n),
+    run: i => { const b = bfOf(i), n = G.cards[i].n; b.tf = !b.tf; addLog(b.tf ? `transforma ${faceName(n)} en ${faceName(n, true)}` : `vuelve ${faceName(n, true)} a su cara de delante (${faceName(n)})`); changed(); } },
+  { key: "C", label: "Copiar (crea una ficha igual)", when: (z, c, b) => !(b && b.f), run: i => { const c = G.cards[i], b = bfOf(i); createToken(faceName(c.n, b && b.tf), faceU(c, b) || img(c.n, "img"), true); } },
   null,
   { key: "M", label: "A la mano", when: z => z !== "hand", run: i => move(i, "hand") },
   { key: "Supr", label: "Al cementerio", when: z => z !== "gy", run: i => move(i, "gy", { force: true }) },
@@ -768,13 +931,27 @@ function openZone(z, topN) {
   const title = z === "lib" ? (topN ? `Las ${topN} de arriba de tu biblioteca` : "Tu biblioteca") : z === "gy" ? "Tu cementerio" : "Tu exilio";
   viewer(title, ids.map(i => ({ n: G.cards[i].n, i })), z, z === "lib" && !topN ? "Al cerrar se baraja la biblioteca." : (topN ? "Pulsa una carta para moverla; las demás se quedan arriba en este orden." : ""));
 }
+// Texto por el que se filtra cada carta del visor: nombre, tipo y subtipos (en inglés, como en Scryfall).
+const fold = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const filterText = n => { const c = SF.cached(n); return fold([n, c && c.type, c && c.sub].filter(Boolean).join(" ")); };
+// Palabras en español que se buscan como su tipo en inglés.
+const ES_TYPES = { criatura: "creature", criaturas: "creature", tierra: "land", tierras: "land", instantaneo: "instant", instantaneos: "instant", conjuro: "sorcery", conjuros: "sorcery", artefacto: "artifact", artefactos: "artifact", encantamiento: "enchantment", encantamientos: "enchantment", legendaria: "legendary", legendario: "legendary", basica: "basic", equipo: "equipment", aura: "aura", batalla: "battle" };
+function applyFilter() {
+  const words = fold($("#vFilter").value).split(/\s+/).filter(Boolean).map(w => ES_TYPES[w] || w);
+  let shown = 0;
+  $("#vGrid").querySelectorAll(".pvcard").forEach(b => { const ok = words.every(w => b.dataset.f.includes(w)); b.hidden = !ok; if (ok) shown++; });
+  $("#vNone").hidden = !words.length || shown > 0;
+}
 function viewer(title, list, zone, note = "") {
   const dlg = $("#viewer");
   $("#vTitle").textContent = title; $("#vNote").textContent = note;
-  $("#vGrid").innerHTML = list.length ? list.map(c => `<button class="pvcard"${c.i ? ` data-vi="${c.i}"` : ""}${zoomAttr(c.n)}>${cardImg(c.n)}<span>${esc(c.n)}</span></button>`).join("") : '<p class="muted small">No hay cartas.</p>';
+  $("#vGrid").innerHTML = list.length ? list.map(c => `<button class="pvcard" data-f="${esc(filterText(c.n))}"${c.i ? ` data-vi="${c.i}"` : ""}${zoomAttr(c.n)}>${cardImg(c.n)}<span>${esc(c.n)}</span></button>`).join("") : '<p class="muted small">No hay cartas.</p>';
+  const f = $("#vFilter"); f.value = ""; f.hidden = list.length < 6; $("#vNone").hidden = true;
   dlg.dataset.zone = zone || ""; dlg.dataset.shuffle = note.startsWith("Al cerrar") ? "1" : "";
   if (!dlg.open) dlg.showModal();
+  if (!f.hidden) f.focus();
 }
+$("#vFilter").addEventListener("input", applyFilter);
 $("#viewer").addEventListener("close", () => {
   const d = $("#viewer");
   if (d.dataset.shuffle && G) { shuffle(G.lib); addLog("baraja su biblioteca"); changed(); }
